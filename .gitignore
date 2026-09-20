@@ -49,3 +49,10 @@ data/*.sqlite3
 # OS
 .DS_Store
 Thumbs.db
+
+# Multi-Agent Worktrees & Scratch
+Crypto-Trace-Claude/
+Crypto-Trace-Codex/
+Crypto-Trace-Gemini/
+.ai/scratch/
+
