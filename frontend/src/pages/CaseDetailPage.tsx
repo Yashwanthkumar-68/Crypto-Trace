@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, Shield, Clock, Database, Cpu, Brain, CheckSquare,
   Network, GitCommit, AlertTriangle, Eye, FileText, History,
-  Plus, ExternalLink, RefreshCw, Send, CheckCircle2
+  Plus, ExternalLink, RefreshCw, Send, CheckCircle2, Building2,
+  Link2, Users, AlertOctagon, TrendingUp, Layers, ChevronRight, Fingerprint,
+  Scale, FileCheck2
 } from 'lucide-react';
 import {
   Case, Transaction, SubgraphData, MoneyTrailPath,
   RiskAssessment, RiskFinding, EvidenceItem, MonitoredWallet,
-  ReportData, AuditLogItem, User
+  ReportData, AuditLogItem, User, CaseSyndicateIntelResponse
 } from '../types';
 import { api } from '../services/api';
 import { TruthBadge } from '../components/TruthBadge';
 import { TransactionGraph } from '../components/TransactionGraph';
+import { ThreatGraph } from '../components/ThreatGraph';
 import { MoneyTrailTimeline } from '../components/MoneyTrailTimeline';
 import { RiskBreakdown } from '../components/RiskBreakdown';
 import { PriorityWalletTable } from '../components/PriorityWalletTable';
@@ -19,16 +22,22 @@ import { CopilotDrawer } from '../components/CopilotDrawer';
 import { EvidenceLocker } from '../components/EvidenceLocker';
 import { ReportViewer } from '../components/ReportViewer';
 import { UnifiedTimeline } from '../components/UnifiedTimeline';
+import { GeoMap } from '../components/GeoMap';
+import { CollaborationPanel } from '../components/CollaborationPanel';
+import { CaseJourneyMap } from '../components/CaseJourneyMap';
 
 interface CaseDetailPageProps {
   caseId: string;
   currentUser: User | null;
   onBack: () => void;
   onInspectWallet: (address: string) => void;
+  onOpenCase?: (caseId: string) => void;
 }
 
 type TabType =
   | 'overview'
+  | 'syndicate'
+  | 'visual'
   | 'timeline'
   | 'graph'
   | 'trail'
@@ -39,13 +48,16 @@ type TabType =
   | 'copilot'
   | 'monitoring'
   | 'reports'
-  | 'audit';
+  | 'audit'
+  | 'geo'
+  | 'collaboration';
 
 export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
   caseId,
   currentUser,
   onBack,
-  onInspectWallet
+  onInspectWallet,
+  onOpenCase
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [caseData, setCaseData] = useState<Case | null>(null);
@@ -72,6 +84,9 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const [auditVerification, setAuditVerification] = useState<any>(null);
   const [verifyingAudit, setVerifyingAudit] = useState(false);
+  const [syndicateIntel, setSyndicateIntel] = useState<CaseSyndicateIntelResponse | null>(null);
+  const [scanningLinks, setScanningLinks] = useState(false);
+  const [graphViewMode, setGraphViewMode] = useState<'force' | 'hierarchical'>('force');
 
   const loadCaseFull = async () => {
     setLoading(true);
@@ -87,7 +102,8 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
         reps,
         audits,
         notesData,
-        wsData
+        wsData,
+        intel
       ] = await Promise.all([
         api.getCase(caseId).catch(() => null),
         api.getCaseTransactions(caseId).catch(() => []),
@@ -99,7 +115,8 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
         api.getReports(caseId).catch(() => []),
         api.getAuditLogs(caseId).catch(() => []),
         api.getCaseNotes(caseId).catch(() => []),
-        api.getCaseWorkspace(caseId).catch(() => null)
+        api.getCaseWorkspace(caseId).catch(() => null),
+        api.getCaseLinks(caseId).catch(() => null)
       ]);
 
       setCaseData(c);
@@ -112,6 +129,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
       setReportsList(reps || []);
       setAuditLogs(audits || []);
       setNotes(notesData || []);
+      setSyndicateIntel(intel);
       if (wsData?.allowed_transitions && wsData.allowed_transitions.length > 0) {
         setAllowedTransitions(wsData.allowed_transitions);
         setSelectedTransition(wsData.allowed_transitions[0]);
@@ -124,6 +142,20 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
       console.error('Failed to load case full details', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleScanLinks = async () => {
+    setScanningLinks(true);
+    try {
+      const updatedIntel = await api.scanCaseLinks(caseId);
+      setSyndicateIntel(updatedIntel);
+      // Reload workspace and timeline for freshly created syndicate events
+      loadCaseFull();
+    } catch (err: any) {
+      alert(err.message || 'Failed to scan cross-case links');
+    } finally {
+      setScanningLinks(false);
     }
   };
 
@@ -142,6 +174,33 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
       alert('Failed to export NCRP dossier: ' + err.message);
     } finally {
       setExportingNcrp(false);
+    }
+  };
+
+  const [generatingSubpoena, setGeneratingSubpoena] = useState(false);
+
+  const handleDownloadSubpoena = async (walletAddress?: string) => {
+    const targetWallet = walletAddress || caseData?.suspect_wallet;
+    if (!targetWallet) {
+      alert('No target wallet address specified for Section 94 BNSS Subpoena.');
+      return;
+    }
+    setGeneratingSubpoena(true);
+    try {
+      const blob = await api.downloadSubpoena(caseId, targetWallet);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cleanShort = targetWallet.length >= 10 ? targetWallet.slice(0, 10) : targetWallet;
+      a.download = `Subpoena_Sec94_BNSS_${caseId}_${cleanShort}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Failed to generate Section 94 BNSS Subpoena: ' + err.message);
+    } finally {
+      setGeneratingSubpoena(false);
     }
   };
 
@@ -319,6 +378,16 @@ Specialized Law Enforcement Forensic Unit
               <h2 className="text-xl font-black text-[#1E293B] tracking-wide">
                 {caseData.title || caseData.complaint_reference}
               </h2>
+              {caseData.origin === 'EXTERNAL_IMPORT' ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                  <Building2 className="w-3 h-3 text-purple-600" />
+                  <span>Physical FIR ({caseData.external_reference || 'External'})</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  App Filing
+                </span>
+              )}
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                 {caseData.blockchain}
               </span>
@@ -342,13 +411,37 @@ Specialized Law Enforcement Forensic Unit
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">
-              Ref: <span className="text-slate-700 font-semibold">{caseData.complaint_reference}</span> • Suspect Wallet: <span className="text-red-600 font-semibold">{caseData.suspect_wallet}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-mono mt-0.5">
+              <span>Ref: <span className="text-slate-700 font-semibold">{caseData.complaint_reference}</span></span>
+              <span>• Suspect Wallet: <span className="text-red-600 font-semibold">{caseData.suspect_wallet}</span></span>
+              {caseData.suspect_wallet && (
+                <button
+                  onClick={() => handleDownloadSubpoena(caseData.suspect_wallet)}
+                  disabled={generatingSubpoena}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold border border-purple-300 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                  title="Generate Section 94 BNSS Statutory Notice ordering Exchange to freeze wallet and furnish KYC"
+                >
+                  <Scale className="w-3 h-3 text-purple-700" />
+                  <span>{generatingSubpoena ? 'Generating...' : '⚖️ Generate KYC Subpoena'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {caseData.suspect_wallet && (
+            <button
+              onClick={() => handleDownloadSubpoena(caseData.suspect_wallet)}
+              disabled={generatingSubpoena}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              title="1-Click Download of Statutory Notice under Section 94 BNSS, 2023 / Section 91 CrPC"
+            >
+              <Scale className="w-4 h-4 text-purple-200" />
+              <span>{generatingSubpoena ? 'Generating Notice...' : '⚖️ Section 94 Subpoena'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowSection91Modal(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
@@ -379,11 +472,62 @@ Specialized Law Enforcement Forensic Unit
         </div>
       </div>
 
+      {/* AI-Agent Driven Forensic Journey Map */}
+      <CaseJourneyMap caseData={caseData} />
+
+      {/* Crime Syndicate Alert Banner */}
+      {syndicateIntel?.is_part_of_syndicate && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950 via-purple-950 to-slate-900 border-2 border-red-500/60 shadow-xl text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+            <AlertOctagon className="w-48 h-48 text-red-400" />
+          </div>
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-widest bg-red-500/30 text-red-300 border border-red-400/40 uppercase flex items-center gap-1.5 animate-pulse">
+                  <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+                  CRIME SYNDICATE RING DETECTED
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-purple-500/30 text-purple-300 border border-purple-400/40">
+                  {syndicateIntel.syndicate_tag}
+                </span>
+              </div>
+              <h3 className="text-base font-bold text-white tracking-wide">
+                Coordinated Attack Ring Linking {syndicateIntel.total_victims} Victim Complaints
+              </h3>
+              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                Shared suspect wallet{' '}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-[11px] border border-white/10">
+                  {caseData.suspect_wallet}
+                </code>{' '}
+                has been connected to <strong className="text-white">{syndicateIntel.total_linked_cases} other cyber cases</strong> across the department, with cumulative stolen funds of <strong className="text-emerald-400">₹{syndicateIntel.cumulative_loss_amount.toLocaleString()} {syndicateIntel.currency}</strong>.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setActiveTab('syndicate')}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-900/40 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Link2 className="w-4 h-4" />
+                <span>Examine Crime Ring ({syndicateIntel.total_linked_cases})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs Navigation */}
       <div className="border-b border-slate-200 flex items-center gap-1 overflow-x-auto pb-1">
         {[
           { id: 'overview', label: 'Overview' },
-          { id: 'timeline', label: 'Unified Timeline' },
+          {
+            id: 'syndicate',
+            label: syndicateIntel?.is_part_of_syndicate
+              ? `🔗 Crime Ring (${syndicateIntel.total_linked_cases})`
+              : 'Syndicate Links'
+          },
+          { id: 'visual', label: '🕸️ Visual Analysis' },
+          { id: 'timeline', label: '⏱️ Campaign Timeline' },
           { id: 'graph', label: 'Transaction Graph' },
           { id: 'trail', label: 'Money Trail' },
           { id: 'risk', label: 'Risk Analysis' },
@@ -392,7 +536,9 @@ Specialized Law Enforcement Forensic Unit
           { id: 'copilot', label: 'Investigation Copilot' },
           { id: 'monitoring', label: 'Watchlist & Alerts' },
           { id: 'reports', label: `Reports (${reportsList.length})` },
-          { id: 'audit', label: 'Audit Trail' }
+          { id: 'audit', label: 'Audit Trail' },
+          { id: 'geo', label: 'Geo Intelligence' },
+          { id: 'collaboration', label: 'Team Collaboration' }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -418,7 +564,10 @@ Specialized Law Enforcement Forensic Unit
               <h3 className="text-2xl font-black font-mono text-[#1E293B] mt-1">
                 {caseData.amount_lost.toLocaleString()} {caseData.currency}
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Victim: {caseData.victim_name}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Victim: {caseData.unregistered_victim_name || caseData.victim_name || 'Walk-in Complainant'}
+                {caseData.unregistered_victim_contact && ` • Contact: ${caseData.unregistered_victim_contact}`}
+              </p>
             </div>
 
             <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
@@ -503,6 +652,15 @@ Specialized Law Enforcement Forensic Unit
               </p>
               <div className="text-[11px] text-slate-500 font-mono space-y-1">
                 <p>Case ID: {caseData.case_id}</p>
+                {caseData.external_reference && (
+                  <p className="text-purple-700 font-semibold">External FIR / Station Ref: {caseData.external_reference}</p>
+                )}
+                {caseData.unregistered_victim_name && (
+                  <p>Complainant Name: {caseData.unregistered_victim_name}</p>
+                )}
+                {caseData.unregistered_victim_contact && (
+                  <p>Complainant Contact: {caseData.unregistered_victim_contact}</p>
+                )}
                 <p>Registered Date: {new Date(caseData.created_at).toLocaleString()}</p>
                 <p>Investigator Assigned: {caseData.assigned_investigator?.full_name || 'Inspector Vikram Malhotra'}</p>
               </div>
@@ -552,6 +710,242 @@ Specialized Law Enforcement Forensic Unit
         </div>
       )}
 
+      {/* Tab: Cross-Case Syndicate Links (Link Analysis) */}
+      {activeTab === 'syndicate' && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-[#1E293B] tracking-wide flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-purple-600" />
+                    Cross-Case Wallet Intelligence (Link Analysis)
+                  </h3>
+                  {syndicateIntel?.is_part_of_syndicate ? (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-100 text-red-700 border border-red-200 uppercase animate-pulse">
+                      Active Crime Ring
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                      Isolated Case
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Automated correlation engine detecting shared suspect wallets and coordinated money mule syndicates across physical cyber FIRs and online victim reports.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleScanLinks}
+                  disabled={scanningLinks}
+                  className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Rescan all cases in the database for matching suspect wallets"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-purple-600 ${scanningLinks ? 'animate-spin' : ''}`} />
+                  <span>{scanningLinks ? 'Scanning Database...' : 'Re-scan Cross-Case Links'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Syndicate Cluster Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                  <Fingerprint className="w-3.5 h-3.5 text-purple-600" />
+                  Syndicate Identifier
+                </p>
+                <h4 className="text-lg font-black font-mono text-purple-800 mt-1">
+                  {syndicateIntel?.syndicate_tag || 'STANDALONE'}
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {syndicateIntel?.is_part_of_syndicate ? 'Confirmed Multi-Victim Ring' : 'No cross-case link'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                  Cumulative Ring Loss
+                </p>
+                <h4 className="text-lg font-black font-mono text-emerald-700 mt-1">
+                  ₹{(syndicateIntel?.cumulative_loss_amount ?? caseData.amount_lost).toLocaleString()} {syndicateIntel?.currency || 'INR'}
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Combined stolen capital across victims
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  Targeted Victims
+                </p>
+                <h4 className="text-lg font-black font-mono text-blue-700 mt-1">
+                  {syndicateIntel?.total_victims ?? 1} Victim Complaint{(syndicateIntel?.total_victims ?? 1) === 1 ? '' : 's'}
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {syndicateIntel?.total_linked_cases ?? 0} other linked case dossier{(syndicateIntel?.total_linked_cases ?? 0) === 1 ? '' : 's'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-amber-600" />
+                  Match Criteria
+                </p>
+                <h4 className="text-lg font-black font-mono text-amber-700 mt-1">
+                  Direct Wallet Match
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5 truncate" title={caseData.suspect_wallet || ''}>
+                  {caseData.suspect_wallet ? `${caseData.suspect_wallet.slice(0, 10)}...${caseData.suspect_wallet.slice(-8)}` : 'None'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Linked Cases List */}
+          {syndicateIntel?.is_part_of_syndicate && syndicateIntel.links && syndicateIntel.links.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                  <AlertOctagon className="w-4 h-4 text-red-600" />
+                  Connected Crime Ring Cases ({syndicateIntel.links.length})
+                </h4>
+                <span className="text-xs text-slate-500">
+                  Shared Suspect Wallet: <span className="font-mono font-semibold text-slate-700">{caseData.suspect_wallet}</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {syndicateIntel.links.map((link) => (
+                  <div
+                    key={link.id}
+                    className="p-5 rounded-2xl bg-white border border-purple-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-5"
+                  >
+                    <div className="space-y-2 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-black text-sm text-slate-800">
+                          {link.linked_case.case_number || link.linked_case.case_id}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                          {link.syndicate_tag || 'SYNDICATE-RING'}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          100% Match Confidence
+                        </span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          {link.linked_case.blockchain}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          {link.linked_case.status}
+                        </span>
+                      </div>
+
+                      <h5 className="text-sm font-bold text-slate-800">
+                        {link.linked_case.title || `Complaint by ${link.linked_case.victim_name}`}
+                      </h5>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600 font-medium">
+                        <div>
+                          <span className="text-slate-400">Victim: </span>
+                          <span className="text-slate-800 font-bold">{link.linked_case.victim_name}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Reported Loss: </span>
+                          <span className="text-red-600 font-bold font-mono">
+                            ₹{link.linked_case.amount_lost.toLocaleString()} {link.linked_case.currency}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Assigned Officer: </span>
+                          <span className="text-slate-800 font-bold">{link.linked_case.assigned_investigator_name || 'Inspector Assigned'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <span className="text-purple-700 font-bold">Shared Address:</span>
+                        <span className="text-slate-700 font-semibold">{link.shared_wallet}</span>
+                        <button
+                          onClick={() => onInspectWallet(link.shared_wallet)}
+                          className="ml-auto text-[10px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Inspect On-Chain</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-col items-center justify-end gap-2 shrink-0">
+                      {onOpenCase && (
+                        <button
+                          onClick={() => onOpenCase(link.target_case_id)}
+                          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer w-full justify-center"
+                        >
+                          <span>Open Case Dossier</span>
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Cyber Cell SOP & Legal Advisory */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 shadow-sm space-y-3">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-purple-700" />
+                  Cyber Crime Department Standard Operating Procedure (SOP)
+                </h5>
+                <p className="text-xs text-purple-950 leading-relaxed">
+                  <strong>Consolidated Subpoena Advisory:</strong> Multiple victims have deposited funds into identical suspect wallet{' '}
+                  <code className="px-1 py-0.5 rounded bg-white font-mono text-[11px] text-purple-800 font-bold">
+                    {caseData.suspect_wallet}
+                  </code>.
+                  Law enforcement officers are authorized to issue a combined <strong>Section 91 CrPC notice</strong> to centralized exchanges (VASPs). KYC disclosures and bank account settlement details obtained for this wallet can be officially shared and admitted as evidence across all {syndicateIntel.total_victims} linked case proceedings.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+                <Link2 className="w-6 h-6" />
+              </div>
+              <h4 className="text-base font-bold text-slate-800">
+                No Shared Wallets Found in Other Cases
+              </h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                The suspect wallet <code className="font-mono text-slate-700 font-semibold">{caseData.suspect_wallet || 'N/A'}</code> has not appeared in any other registered cyber complaints yet. When another victim or FIR mentions this address, Crypto-Trace will automatically cluster them here.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={handleScanLinks}
+                  disabled={scanningLinks}
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${scanningLinks ? 'animate-spin' : ''}`} />
+                  <span>Scan Database Now</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Interactive Threat Graph (Visual Analysis) */}
+      {activeTab === 'visual' && (
+        <div className="space-y-4">
+          <ThreatGraph
+            transactions={transactions}
+            suspectWallet={caseData.suspect_wallet}
+            onInspectWallet={onInspectWallet}
+            onGenerateSubpoena={handleDownloadSubpoena}
+          />
+        </div>
+      )}
+
       {/* Tab: Unified Forensic Timeline */}
       {activeTab === 'timeline' && (
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 space-y-4">
@@ -567,21 +961,64 @@ Specialized Law Enforcement Forensic Unit
             </div>
             <TruthBadge category="AUDIT LOG" size="sm" />
           </div>
-          <UnifiedTimeline caseId={caseId} />
+          <UnifiedTimeline
+            caseId={caseId}
+            onInspectWallet={onInspectWallet}
+            onOpenCase={onOpenCase}
+          />
         </div>
       )}
 
-      {/* Tab 2: Transaction Graph */}
+      {/* Tab 2: Transaction Graph & Threat Graph */}
       {activeTab === 'graph' && (
         <div className="space-y-4">
-          <TransactionGraph
-            data={graphData}
-            selectedHop={selectedHops}
-            onHopChange={handleHopChange}
-            suspiciousOnly={suspiciousOnly}
-            onToggleSuspiciousOnly={() => setSuspiciousOnly(!suspiciousOnly)}
-            onInspectWallet={onInspectWallet}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Graph Mode:</span>
+              <button
+                onClick={() => setGraphViewMode('force')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  graphViewMode === 'force'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <span>🕸️ Force-2D Interactive Threat Graph</span>
+              </button>
+              <button
+                onClick={() => setGraphViewMode('hierarchical')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  graphViewMode === 'hierarchical'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <span>📊 Multi-Hop Hierarchical Flow</span>
+              </button>
+            </div>
+            <div className="text-xs text-slate-500 flex items-center gap-1.5 bg-blue-50/80 text-blue-700 px-3 py-1 rounded-lg border border-blue-200">
+              <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <span>Hover on any node to view <strong>Wallet Age</strong>, <strong>Balance</strong>, & <strong>Risk Score</strong></span>
+            </div>
+          </div>
+
+          {graphViewMode === 'force' ? (
+            <ThreatGraph
+              transactions={transactions}
+              suspectWallet={caseData?.suspect_wallet}
+              onInspectWallet={onInspectWallet}
+              onGenerateSubpoena={handleDownloadSubpoena}
+            />
+          ) : (
+            <TransactionGraph
+              data={graphData}
+              selectedHop={selectedHops}
+              onHopChange={handleHopChange}
+              suspiciousOnly={suspiciousOnly}
+              onToggleSuspiciousOnly={() => setSuspiciousOnly(!suspiciousOnly)}
+              onInspectWallet={onInspectWallet}
+            />
+          )}
         </div>
       )}
 
@@ -811,6 +1248,31 @@ Specialized Law Enforcement Forensic Unit
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Tab 11: Geo Intelligence */}
+      {activeTab === 'geo' && (
+        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <div>
+              <h3 className="text-base font-bold text-[#1E293B] tracking-wide flex items-center gap-2">
+                Geo Intelligence & Subpoena Jurisdictions
+              </h3>
+              <p className="text-xs text-slate-500">
+                Maps identified Exchange/VASP destinations to their global headquarters and physical jurisdictions.
+              </p>
+            </div>
+            <TruthBadge category="VERIFIED" size="sm" />
+          </div>
+          <GeoMap caseId={caseId} />
+        </div>
+      )}
+
+      {/* Tab 12: Team Collaboration */}
+      {activeTab === 'collaboration' && (
+        <div className="space-y-4">
+          <CollaborationPanel caseId={caseId} />
         </div>
       )}
 

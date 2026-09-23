@@ -47,7 +47,28 @@ class PatternDetector:
         # 8. Unusual counterparty behavior
         all_findings.extend(PatternRules.detect_unusual_counterparty_behavior(wallet_address, transactions))
 
-        # 9. Structurally suspicious compound path
+        # 9. MEV Sandwich Attack
+        all_findings.extend(PatternRules.detect_mev_sandwich(wallet_address, transactions))
+
+        # 10. Flash Loan Exploit
+        all_findings.extend(PatternRules.detect_flash_loan_exploit(wallet_address, transactions))
+
+        # 11. Liquidity Rug Pull
+        all_findings.extend(PatternRules.detect_rug_pull(wallet_address, transactions))
+
+        # 12. Pump and Dump Scheme
+        all_findings.extend(PatternRules.detect_pump_and_dump(wallet_address, transactions))
+
+        # 13. Wash Trading Cycle
+        all_findings.extend(PatternRules.detect_wash_trading(wallet_address, transactions, networkx_graph))
+
+        # 14. Oracle Manipulation Exploit
+        all_findings.extend(PatternRules.detect_oracle_manipulation(wallet_address, transactions))
+
+        # 15. Mempool Front-Running
+        all_findings.extend(PatternRules.detect_front_running(wallet_address, transactions))
+
+        # 16. Structurally suspicious compound path
         compound_findings = PatternRules.detect_structurally_suspicious_paths(
             wallet_address,
             all_findings,
@@ -57,3 +78,4 @@ class PatternDetector:
         all_findings.extend(compound_findings)
 
         return all_findings
+

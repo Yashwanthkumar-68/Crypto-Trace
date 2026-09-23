@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Shield, Radio, UserCheck, LogOut, Terminal, Bell, AlertTriangle } from 'lucide-react';
+import { Shield, Radio, UserCheck, LogOut, Terminal, Bell, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 import { NotificationCenter } from './NotificationCenter';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -23,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   alertCount = 0,
   onOpenCase
 }) => {
+  const { t } = useLanguage();
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
   return (
@@ -49,11 +52,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   CryptoTrace
                 </span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/50">
-                  DEFENSE FORENSICS
+                  {t('brand.badge', 'DEFENSE FORENSICS')}
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 hidden sm:block font-medium">
-                Real-Time VASP Identification & Money Trail Analytics
+                {t('brand.subtitle', 'Real-Time VASP Identification & Money Trail Analytics')}
               </p>
             </div>
           </div>
@@ -70,7 +73,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
                   }`}
                 >
-                  My Complaints
+                  {t('nav.my_complaints', 'My Complaints')}
+                </button>
+                <button
+                  onClick={() => onSelectTab('verify_wallet')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'verify_wallet'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      : 'text-amber-300 hover:text-white hover:bg-slate-800/70 border border-amber-500/30'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{t('nav.verify_wallet', 'Verify Wallet')}</span>
                 </button>
                 <button
                   onClick={() => onSelectTab('create_case')}
@@ -80,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
                   }`}
                 >
-                  File Complaint
+                  {t('nav.file_complaint', 'File Complaint')}
                 </button>
               </>
             ) : currentUser?.role === 'INVESTIGATOR' ? (
@@ -104,6 +118,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   Case Ledger
+                </button>
+                <button
+                  onClick={() => onSelectTab('verify_wallet')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'verify_wallet'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      : 'text-amber-300 hover:text-white hover:bg-slate-800/70 border border-amber-500/30'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Verify Wallet</span>
                 </button>
                 <button
                   onClick={() => onSelectTab('priority')}
@@ -134,6 +159,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   Multi-Chain
+                </button>
+                <button
+                  onClick={() => onSelectTab('analytics')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'analytics'
+                      ? 'bg-[#2563EB] text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  Analytics
+                </button>
+                <button
+                  onClick={() => onSelectTab('batch')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'batch'
+                      ? 'bg-[#2563EB] text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  Batch Trace
                 </button>
                 <button
                   onClick={() => onSelectTab('monitoring')}
@@ -192,6 +237,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   Officer Roster & VASP
+                </button>
+                <button
+                  onClick={() => onSelectTab('analytics')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'analytics'
+                      ? 'bg-[#2563EB] text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  Analytics
+                </button>
+                <button
+                  onClick={() => onSelectTab('batch')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'batch'
+                      ? 'bg-[#2563EB] text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  Batch Trace
                 </button>
                 <button
                   onClick={() => onSelectTab('monitoring')}
@@ -280,6 +345,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-slate-400">Unified Live Sync</span>
             </div>
 
+            {/* Smart Multilingual Language Switcher */}
+            <LanguageSwitcher />
+
             {/* In-App Notification Center */}
             <NotificationCenter onOpenCase={onOpenCase} />
 
@@ -337,8 +405,51 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
             )}
+            
+            {/* Mobile Menu Toggle */}
+            <button 
+              className="md:hidden ml-2 p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700"
+              onClick={() => setShowRoleMenu(!showRoleMenu)}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Menu */}
+        {showRoleMenu && (
+          <nav className="md:hidden py-3 border-t border-slate-800 flex flex-col gap-2">
+             {currentUser?.role === 'INVESTIGATOR' && (
+              <>
+                <button onClick={() => onSelectTab('investigator_dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'investigator_dashboard' ? 'text-white' : 'text-slate-400'}`}>Officer Caseload</button>
+                <button onClick={() => onSelectTab('cases')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'cases' ? 'text-white' : 'text-slate-400'}`}>Case Ledger</button>
+                <button onClick={() => onSelectTab('priority')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'priority' ? 'text-white' : 'text-slate-400'}`}>Priority Queue</button>
+                <button onClick={() => onSelectTab('intelligence')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'intelligence' ? 'text-white' : 'text-slate-400'}`}>Risk & Intel</button>
+                <button onClick={() => onSelectTab('multichain')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'multichain' ? 'text-white' : 'text-slate-400'}`}>Multi-Chain</button>
+                <button onClick={() => onSelectTab('analytics')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'analytics' ? 'text-white' : 'text-slate-400'}`}>Analytics</button>
+                <button onClick={() => onSelectTab('batch')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'batch' ? 'text-white' : 'text-slate-400'}`}>Batch Trace</button>
+                <button onClick={() => onSelectTab('monitoring')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'monitoring' ? 'text-white' : 'text-slate-400'}`}>Monitoring</button>
+              </>
+            )}
+            {currentUser?.role === 'SUPERVISOR' && (
+              <>
+                <button onClick={() => onSelectTab('dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'dashboard' ? 'text-white' : 'text-slate-400'}`}>Command Dashboard</button>
+                <button onClick={() => onSelectTab('cases')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'cases' ? 'text-white' : 'text-slate-400'}`}>Case Ledger & Reviews</button>
+                <button onClick={() => onSelectTab('priority')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'priority' ? 'text-white' : 'text-slate-400'}`}>Priority Triage</button>
+                <button onClick={() => onSelectTab('admin')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'admin' ? 'text-white' : 'text-slate-400'}`}>Officer Roster & VASP</button>
+                <button onClick={() => onSelectTab('analytics')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'analytics' ? 'text-white' : 'text-slate-400'}`}>Analytics</button>
+                <button onClick={() => onSelectTab('batch')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'batch' ? 'text-white' : 'text-slate-400'}`}>Batch Trace</button>
+                <button onClick={() => onSelectTab('monitoring')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'monitoring' ? 'text-white' : 'text-slate-400'}`}>Watchlist & Alerts</button>
+              </>
+            )}
+             {currentUser?.role === 'VICTIM' && (
+              <>
+                <button onClick={() => onSelectTab('victim_dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'victim_dashboard' ? 'text-white' : 'text-slate-400'}`}>My Complaints</button>
+                <button onClick={() => onSelectTab('create_case')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'create_case' ? 'text-white' : 'text-slate-400'}`}>File Complaint</button>
+              </>
+            )}
+          </nav>
+        )}
       </div>
     </header>
   );

@@ -27,6 +27,7 @@ export type CaseStatus =
   | 'CLOSED';
 
 export type CasePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type CaseOrigin = 'NATIVE_APP' | 'EXTERNAL_IMPORT';
 
 export interface Case {
   case_id: string;
@@ -35,6 +36,10 @@ export interface Case {
   victim_id?: number;
   victim_name: string;
   complaint_reference: string;
+  origin?: CaseOrigin;
+  external_reference?: string;
+  unregistered_victim_name?: string;
+  unregistered_victim_contact?: string;
   amount_lost: number;
   currency: string;
   incident_date: string;
@@ -688,5 +693,124 @@ export interface CaseRecommendationsResponse {
   total_recommendations: number;
   recommendations: InvestigationRecommendation[];
 }
+
+// Cross-Case Wallet Intelligence (Link Analysis) Types
+export interface LinkedCaseSummary {
+  case_id: string;
+  case_number?: string;
+  title?: string;
+  victim_name: string;
+  amount_lost: number;
+  currency: string;
+  blockchain: string;
+  status: string;
+  priority: string;
+  incident_date?: string;
+  suspect_wallet?: string;
+  assigned_investigator_name?: string;
+}
+
+export interface CaseLinkItem {
+  id: number;
+  source_case_id: string;
+  target_case_id: string;
+  shared_wallet: string;
+  link_type: string;
+  confidence_score: number;
+  syndicate_tag?: string;
+  created_at: string;
+  linked_case: LinkedCaseSummary;
+}
+
+export interface CaseSyndicateIntelResponse {
+  case_id: string;
+  is_part_of_syndicate: boolean;
+  syndicate_tag?: string;
+  total_linked_cases: number;
+  total_victims: number;
+  cumulative_loss_amount: number;
+  currency: string;
+  shared_wallets: string[];
+  links: CaseLinkItem[];
+}
+
+export interface GlobalSyndicateCluster {
+  syndicate_tag: string;
+  root_wallet: string;
+  case_count: number;
+  victim_count: number;
+  cumulative_loss: number;
+  currency: string;
+  earliest_incident?: string;
+  latest_incident?: string;
+  case_ids: string[];
+  linked_cases: LinkedCaseSummary[];
+}
+
+// Scam Campaign Timeline Types
+export interface ScamCampaignEvent {
+  id: string;
+  category: 'REAL_WORLD' | 'BLOCKCHAIN' | 'SYNDICATE' | 'INVESTIGATION';
+  event_type: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  channel?: string;
+  amount?: number;
+  amount_display?: string;
+  source_entity?: string;
+  target_entity?: string;
+  tx_hash?: string;
+  actor?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ScamCampaignTimelineResponse {
+  case_id: string;
+  case_number?: string;
+  victim_name: string;
+  suspect_wallet?: string;
+  syndicate_tag?: string;
+  total_events: number;
+  real_world_events_count: number;
+  blockchain_events_count: number;
+  syndicate_events_count: number;
+  events: ScamCampaignEvent[];
+}
+
+export interface RealWorldEventCreate {
+  title: string;
+  description: string;
+  timestamp?: string;
+  channel?: string;
+  amount?: number;
+  source_entity?: string;
+  target_entity?: string;
+}
+
+// Citizen Wallet Scam Pre-Check Types
+export interface WalletVerificationRequest {
+  wallet_address: string;
+  blockchain?: string;
+}
+
+export interface WalletVerificationResponse {
+  wallet_address: string;
+  blockchain: string;
+  risk_tier: 'CRITICAL' | 'HIGH' | 'CAUTION';
+  risk_score: number;
+  is_flagged_in_complaints: boolean;
+  complaint_count: number;
+  syndicate_detected: boolean;
+  syndicate_tag?: string;
+  known_entity_label?: string;
+  warning_title: string;
+  warning_message: string;
+  action_directive: 'DO_NOT_TRANSFER' | 'SUSPICIOUS_HIGH_RISK' | 'VERIFY_VASP_KYC' | 'PROCEED_WITH_EXTREME_CAUTION';
+  safety_checklist: string[];
+  inquiry_timestamp: string;
+}
+
+
 
 

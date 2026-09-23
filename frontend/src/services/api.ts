@@ -30,7 +30,13 @@ import {
   InAppNotification,
   CaseAssignment,
   InvestigationRecommendation,
-  CaseRecommendationsResponse
+  CaseRecommendationsResponse,
+  CaseSyndicateIntelResponse,
+  GlobalSyndicateCluster,
+  ScamCampaignTimelineResponse,
+  RealWorldEventCreate,
+  WalletVerificationRequest,
+  WalletVerificationResponse
 } from '../types';
 
 function getApiBase(): string {
@@ -122,6 +128,33 @@ export const api = {
       body: JSON.stringify(caseData)
     });
     if (!res.ok) throw new Error('Failed to create case');
+    return res.json();
+  },
+
+  async importExternalCase(importData: {
+    victim_name: string;
+    victim_contact?: string;
+    external_reference: string;
+    title?: string;
+    amount_lost: number;
+    currency?: string;
+    incident_date?: string;
+    suspect_wallet?: string;
+    blockchain?: string;
+    transaction_hash?: string;
+    description?: string;
+    priority?: string;
+    assigned_investigator_id?: number;
+  }): Promise<Case> {
+    const res = await fetch(`${API_BASE}/cases/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(importData)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to import external case');
+    }
     return res.json();
   },
 
@@ -1016,6 +1049,64 @@ export const api = {
     return res.json();
   },
 
+  async getCaseLinks(caseId: string): Promise<CaseSyndicateIntelResponse> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/links`, { headers: getAuthHeader() });
+    if (!res.ok) throw new Error('Failed to load cross-case syndicate intelligence');
+    return res.json();
+  },
+
+  async scanCaseLinks(caseId: string): Promise<CaseSyndicateIntelResponse> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/scan-links`, {
+      method: 'POST',
+      headers: getAuthHeader()
+    });
+    if (!res.ok) throw new Error('Failed to trigger cross-case link analysis');
+    return res.json();
+  },
+
+  async getSyndicates(): Promise<GlobalSyndicateCluster[]> {
+    const res = await fetch(`${API_BASE}/intelligence/syndicates`, { headers: getAuthHeader() });
+    if (!res.ok) throw new Error('Failed to load global syndicate intelligence');
+    return res.json();
+  },
+
+  async getCaseCampaignTimeline(caseId: string): Promise<ScamCampaignTimelineResponse> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/campaign-timeline`, { headers: getAuthHeader() });
+    if (!res.ok) throw new Error('Failed to load scam campaign timeline');
+    return res.json();
+  },
+
+  async addCaseRealWorldEvent(caseId: string, event: RealWorldEventCreate): Promise<any> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/events`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(event)
+    });
+    if (!res.ok) throw new Error('Failed to record real-world timeline milestone');
+    return res.json();
+  },
+
+  async verifyWallet(payload: WalletVerificationRequest): Promise<WalletVerificationResponse> {
+    let res = await fetch(`${API_BASE}/wallets/verify`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.status === 401) {
+      // Retry without stale token as guest citizen check so victim verification is never blocked
+      res = await fetch(`${API_BASE}/wallets/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to verify wallet address');
+    }
+    return res.json();
+  },
+
   async exportCaseNcrp(caseId: string): Promise<any> {
     const res = await fetch(`${API_BASE}/cases/${caseId}/export/ncrp`, { headers: getAuthHeader() });
     if (!res.ok) throw new Error('Failed to export NCRP formatted dossier');
@@ -1026,6 +1117,43 @@ export const api = {
     const res = await fetch(`${API_BASE}/cases/${caseId}/export/sahyog`, { headers: getAuthHeader() });
     if (!res.ok) throw new Error('Failed to export SAHYOG intelligence record');
     return res.json();
+  },
+
+  async downloadSubpoena(caseId: string, walletAddress: string): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/subpoena/${walletAddress}`, {
+      headers: getAuthHeader()
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to generate Section 94 BNSS Subpoena notice');
+    }
+    return res.blob();
+  },
+
+  async get(url: string): Promise<any> {
+    const res = await fetch(`${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`, { headers: getAuthHeader() });
+    if (!res.ok) throw new Error(`GET ${url} failed`);
+    return { data: await res.json() };
+  },
+
+  async post(url: string, body?: any): Promise<any> {
+    const res = await fetch(`${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) throw new Error(`POST ${url} failed`);
+    return { data: await res.json() };
+  },
+
+  async delete(url: string): Promise<any> {
+    const res = await fetch(`${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`, {
+      method: 'DELETE',
+      headers: getAuthHeader()
+    });
+    if (!res.ok) throw new Error(`DELETE ${url} failed`);
+    return { data: await res.json() };
   }
 };
+
 

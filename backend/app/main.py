@@ -30,6 +30,18 @@ from app.api.priority_api import router as priority_router
 from app.api.chains_api import router as chains_router
 from app.api.investigators import router as investigators_router
 from app.api.notifications import router as notifications_router
+from app.api.websocket_api import router as websocket_router
+from app.api.analytics_api import router as analytics_router
+from app.api.batch_api import router as batch_router
+from app.api.scheduler_api import router as scheduler_router
+from app.api.collaboration_api import router as collaboration_router
+from app.api.geo_api import router as geo_router
+from app.api.quantum_api import router as quantum_router
+from app.api.zk_api import router as zk_router
+from app.api.sms_api import router as sms_router
+from app.api.cross_case_api import router as cross_case_router
+from app.api.wallet_verify_api import router as wallet_verify_router
+from app.api.ai_agent_api import router as ai_agent_router
 from app.blockchain.chain_registry import ChainRegistry
 from app.entities.service import EntityService
 
@@ -118,6 +130,24 @@ app.include_router(investigators_router)
 app.include_router(investigators_router, prefix="/api")
 app.include_router(notifications_router)
 app.include_router(notifications_router, prefix="/api")
+
+# Mount New Feature Routers
+app.include_router(websocket_router)
+app.include_router(analytics_router, prefix="/api")
+app.include_router(batch_router, prefix="/api")
+app.include_router(scheduler_router, prefix="/api")
+app.include_router(collaboration_router, prefix="/api")
+app.include_router(geo_router, prefix="/api")
+app.include_router(quantum_router, prefix="/api")
+app.include_router(quantum_router)
+app.include_router(zk_router, prefix="/api")
+app.include_router(sms_router, prefix="/api")
+app.include_router(sms_router)
+app.include_router(cross_case_router, prefix="/api")
+app.include_router(cross_case_router)
+app.include_router(wallet_verify_router, prefix="/api")
+app.include_router(wallet_verify_router)
+app.include_router(ai_agent_router, prefix="/api")
 
 @app.get("/", tags=["System"])
 def root_index():

@@ -53,6 +53,15 @@ class CasePriority(str, enum.Enum):
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
+class CaseOrigin(str, enum.Enum):
+    NATIVE_APP = "NATIVE_APP"
+    EXTERNAL_IMPORT = "EXTERNAL_IMPORT"
+
+class CaseLinkType(str, enum.Enum):
+    DIRECT_SUSPECT_WALLET = "DIRECT_SUSPECT_WALLET"
+    SHARED_TRANSIT_HUB = "SHARED_TRANSIT_HUB"
+    COMMON_TRANSACTION = "COMMON_TRANSACTION"
+
 class EntityType(str, enum.Enum):
     VASP = "VASP"
     EXCHANGE = "EXCHANGE"
@@ -127,6 +136,10 @@ class Case(Base):
     transaction_hash = Column(String(128), nullable=True)
     status = Column(Enum(CaseStatus), default=CaseStatus.NEW, nullable=False)
     priority = Column(Enum(CasePriority), default=CasePriority.HIGH, nullable=False)
+    origin = Column(Enum(CaseOrigin), default=CaseOrigin.NATIVE_APP, nullable=False)
+    external_reference = Column(String(128), nullable=True)
+    unregistered_victim_name = Column(String(128), nullable=True)
+    unregistered_victim_contact = Column(String(128), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     assigned_investigator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -141,6 +154,24 @@ class Case(Base):
     monitored_wallets = relationship("Monitoring", back_populates="case", cascade="all, delete-orphan")
     priority_items = relationship("PriorityItem", back_populates="case", cascade="all, delete-orphan")
     timeline_events = relationship("InvestigationTimeline", back_populates="case", cascade="all, delete-orphan")
+    links_as_source = relationship("CaseLink", foreign_keys="[CaseLink.source_case_id]", back_populates="source_case", cascade="all, delete-orphan")
+    links_as_target = relationship("CaseLink", foreign_keys="[CaseLink.target_case_id]", back_populates="target_case", cascade="all, delete-orphan")
+
+
+class CaseLink(Base):
+    __tablename__ = "case_links"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_case_id = Column(String(64), ForeignKey("cases.case_id", ondelete="CASCADE"), nullable=False, index=True)
+    target_case_id = Column(String(64), ForeignKey("cases.case_id", ondelete="CASCADE"), nullable=False, index=True)
+    shared_wallet = Column(String(128), nullable=False, index=True)
+    link_type = Column(Enum(CaseLinkType), default=CaseLinkType.DIRECT_SUSPECT_WALLET, nullable=False)
+    confidence_score = Column(Float, default=1.0)
+    syndicate_tag = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+    source_case = relationship("Case", foreign_keys=[source_case_id], back_populates="links_as_source")
+    target_case = relationship("Case", foreign_keys=[target_case_id], back_populates="links_as_target")
 
 
 class Wallet(Base):

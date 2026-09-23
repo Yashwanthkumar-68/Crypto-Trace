@@ -97,6 +97,10 @@ class PatternService:
                 ).delete(synchronize_session=False)
 
                 for f in findings:
+                    ev = dict(f.evidence) if f.evidence else {}
+                    if f.defi_parameters:
+                        ev["defi_parameters"] = f.defi_parameters.model_dump()
+
                     rec = AnalysisPattern(
                         case_id=case_id,
                         wallet_address=norm_wallet,
@@ -109,7 +113,7 @@ class PatternService:
                         description=f.description,
                         related_wallets=f.related_wallets,
                         related_transaction_hashes=f.related_transaction_hashes,
-                        evidence_json=f.evidence,
+                        evidence_json=ev,
                         detected_at=f.detected_at,
                         created_at=datetime.datetime.utcnow()
                     )

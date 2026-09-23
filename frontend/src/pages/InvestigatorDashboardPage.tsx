@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, CheckCircle, Play, AlertCircle, Clock, FileText, ChevronRight, UserCheck, Activity, Eye, Download, Sparkles, RefreshCw } from 'lucide-react';
+import { Shield, CheckCircle, Play, AlertCircle, Clock, FileText, ChevronRight, UserCheck, Activity, Eye, Download, Sparkles, RefreshCw, Building2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Case, User, InvestigatorProfile, InvestigationRecommendation } from '../types';
+import { ImportExternalCaseModal } from '../components/ImportExternalCaseModal';
 
 interface InvestigatorDashboardPageProps {
   currentUser: User;
@@ -16,6 +17,7 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Recommendations modal
   const [selectedRecommendations, setSelectedRecommendations] = useState<{ caseId: string; recs: InvestigationRecommendation[] } | null>(null);
@@ -146,6 +148,14 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
           </div>
 
           <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Import Physical FIR</span>
+          </button>
+
+          <button
             onClick={loadData}
             title="Refresh Caseload"
             className="p-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-sm"
@@ -177,10 +187,17 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
               >
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-mono text-xs font-bold text-amber-800">{c.case_number || c.case_id}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-bold text-amber-800">{c.case_number || c.case_id}</span>
+                      {c.origin === 'EXTERNAL_IMPORT' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                          FIR: {c.external_reference || 'External'}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs font-bold text-[#1E293B]">₹{c.amount_lost.toLocaleString('en-IN')}</span>
                   </div>
-                  <p className="text-xs font-semibold text-[#1E293B]">{c.title || `Victim: ${c.victim_name}`}</p>
+                  <p className="text-xs font-semibold text-[#1E293B]">{c.title || `Victim: ${c.unregistered_victim_name || c.victim_name || 'Complainant'}`}</p>
                   <p className="text-[11px] text-slate-500 mt-1 truncate font-mono">
                     Suspect: {c.suspect_wallet || 'Pending Tx resolution'}
                   </p>
@@ -189,14 +206,14 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                   <button
                     onClick={(e) => handleAcceptCase(c.case_id, e)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     Accept Case
                   </button>
                   <button
                     onClick={(e) => handleStartInvestigation(c.case_id, e)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
                   >
                     <Play className="w-3.5 h-3.5" />
                     Start Investigation
@@ -238,12 +255,17 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
                       <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                         {c.case_number || c.case_id}
                       </span>
+                      {c.origin === 'EXTERNAL_IMPORT' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                          FIR: {c.external_reference || 'External'}
+                        </span>
+                      )}
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase">
                         {c.status.replace(/_/g, ' ')}
                       </span>
                     </div>
                     <h4 className="text-sm font-bold text-[#1E293B] group-hover:text-[#2563EB] transition-colors">
-                      {c.title || `Victim: ${c.victim_name}`}
+                      {c.title || `Victim: ${c.unregistered_victim_name || c.victim_name || 'Complainant'}`}
                     </h4>
                   </div>
                   <span className="font-mono text-xs font-black text-amber-700">
@@ -252,7 +274,7 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
                 </div>
 
                 <div className="text-xs text-slate-500 space-y-1 font-mono text-[11px]">
-                  <p>Complainant: <span className="text-slate-800 font-medium">{c.victim_name}</span></p>
+                  <p>Complainant: <span className="text-slate-800 font-medium">{c.unregistered_victim_name || c.victim_name || 'Walk-in Complainant'}</span></p>
                   <p className="truncate">Wallet: <span className="text-slate-800 font-medium">{c.suspect_wallet || 'Pending resolution'}</span></p>
                   <p>Network: <span className="text-slate-700">{c.blockchain}</span></p>
                 </div>
@@ -337,6 +359,16 @@ export const InvestigatorDashboardPage: React.FC<InvestigatorDashboardPageProps>
           </div>
         </div>
       )}
+
+      {/* External Case Import Modal */}
+      <ImportExternalCaseModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={(newCase) => {
+          loadData();
+          onOpenCase(newCase.case_id);
+        }}
+      />
     </div>
   );
 };

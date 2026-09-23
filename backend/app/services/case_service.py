@@ -4,11 +4,11 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from app.database.models import (
-    Case, User, UserRole, CaseStatus, CasePriority, AuditLog,
+    Case, User, UserRole, CaseStatus, CasePriority, CaseOrigin, AuditLog,
     CaseAssignment, CaseAssignmentStatus, Notification,
-    InvestigatorProfile, InvestigatorApprovalStatus
+    InvestigatorProfile, InvestigatorApprovalStatus, InvestigatorAvailabilityStatus
 )
-from app.database.schemas import CaseCreate, CaseUpdate
+from app.database.schemas import CaseCreate, CaseUpdate, ExternalCaseImportRequest
 from app.services.timeline_service import TimelineService
 
 class CaseService:
@@ -47,6 +47,24 @@ class CaseService:
                 if prof and prof.approval_status == InvestigatorApprovalStatus.APPROVED:
                     assigned_id = inv.id
                     initial_status = CaseStatus.ASSIGNED
+        elif not chosen_inv_id and user.role == UserRole.VICTIM:
+            # Auto-assign victim complaint to first approved available investigator
+            default_inv = (
+                db.query(User)
+                .join(InvestigatorProfile, User.id == InvestigatorProfile.user_id)
+                .filter(
+                    User.role == UserRole.INVESTIGATOR,
+                    User.is_active == True,
+                    InvestigatorProfile.approval_status == InvestigatorApprovalStatus.APPROVED,
+                    InvestigatorProfile.availability_status == InvestigatorAvailabilityStatus.AVAILABLE
+                )
+                .first()
+            )
+            if not default_inv:
+                default_inv = db.query(User).filter(User.role == UserRole.INVESTIGATOR, User.is_active == True).first()
+            if default_inv:
+                assigned_id = default_inv.id
+                initial_status = CaseStatus.ASSIGNED
 
         case = Case(
             case_id=case_id,
@@ -64,6 +82,10 @@ class CaseService:
             transaction_hash=case_in.transaction_hash,
             status=initial_status,
             priority=case_in.priority,
+            origin=getattr(case_in, "origin", CaseOrigin.NATIVE_APP) or CaseOrigin.NATIVE_APP,
+            external_reference=getattr(case_in, "external_reference", None),
+            unregistered_victim_name=getattr(case_in, "unregistered_victim_name", None),
+            unregistered_victim_contact=getattr(case_in, "unregistered_victim_contact", None),
             assigned_investigator_id=assigned_id
         )
         db.add(case)
@@ -117,6 +139,100 @@ class CaseService:
                 "case_number": case_number,
                 "complaint_reference": ref,
                 "suspect_wallet": case_in.suspect_wallet,
+                "assigned_investigator_id": assigned_id
+            }
+        )
+        db.add(log)
+        db.commit()
+        return case
+
+    @staticmethod
+    def import_external_case(db: Session, import_in: ExternalCaseImportRequest, user: User) -> Case:
+        """
+        Allows law enforcement officers (INVESTIGATOR / SUPERVISOR) to directly register
+        physical walk-in cyber crime complaints without requiring a registered victim account.
+        """
+        year = datetime.datetime.utcnow().year
+        case_id = f"CASE-{uuid.uuid4().hex[:8].upper()}"
+        total_cases = db.query(func.count(Case.case_id)).scalar() or 0
+        case_number = f"CASE-{year}-{total_cases + 1:05d}"
+        
+        ref = import_in.external_reference or f"FIR-{year}-EXT-{uuid.uuid4().hex[:6].upper()}"
+        title = import_in.title or f"External FIR: {import_in.victim_name} ({import_in.amount_lost} {import_in.currency})"
+        incident_dt = import_in.incident_date or datetime.datetime.utcnow()
+
+        # Assigned investigator is user if investigator, or optional assigned_investigator_id
+        assigned_id = None
+        initial_status = CaseStatus.NEW
+        if user.role == UserRole.INVESTIGATOR:
+            assigned_id = user.id
+            initial_status = CaseStatus.ACCEPTED
+        elif import_in.assigned_investigator_id:
+            assigned_id = import_in.assigned_investigator_id
+            initial_status = CaseStatus.ASSIGNED
+
+        case = Case(
+            case_id=case_id,
+            case_number=case_number,
+            title=title,
+            victim_id=None,
+            victim_name=import_in.victim_name,
+            unregistered_victim_name=import_in.victim_name,
+            unregistered_victim_contact=import_in.victim_contact,
+            complaint_reference=ref,
+            external_reference=import_in.external_reference,
+            origin=CaseOrigin.EXTERNAL_IMPORT,
+            amount_lost=import_in.amount_lost,
+            currency=import_in.currency,
+            incident_date=incident_dt,
+            description=import_in.description or f"Walk-in physical cyber department complaint. External Ref: {ref}.",
+            suspect_wallet=import_in.suspect_wallet,
+            blockchain=import_in.blockchain,
+            transaction_hash=import_in.transaction_hash,
+            status=initial_status,
+            priority=import_in.priority,
+            assigned_investigator_id=assigned_id
+        )
+        db.add(case)
+        db.commit()
+        db.refresh(case)
+
+        if assigned_id:
+            assignment = CaseAssignment(
+                case_id=case_id,
+                victim_id=None,
+                investigator_id=assigned_id,
+                status=CaseAssignmentStatus.ACCEPTED if user.role == UserRole.INVESTIGATOR else CaseAssignmentStatus.PENDING,
+                assigned_by_id=user.id,
+                assigned_at=datetime.datetime.utcnow(),
+                notes=f"Physical external import registered by {user.full_name} ({user.role.value}). Ref: {ref}"
+            )
+            db.add(assignment)
+            db.commit()
+
+        # Timeline event
+        TimelineService.record_event(
+            db=db,
+            case_id=case_id,
+            event_type="CASE_IMPORTED",
+            title=f"External Case Imported: {ref}",
+            description=f"Walk-in complaint filed at cyber cell by {import_in.victim_name} (Contact: {import_in.victim_contact or 'N/A'}). FIR / Ref: {ref}. Amount: {import_in.amount_lost} {import_in.currency}.",
+            actor=user.username,
+            metadata={"origin": "EXTERNAL_IMPORT", "external_reference": ref, "case_number": case_number}
+        )
+
+        # Audit Log
+        log = AuditLog(
+            user_id=user.id,
+            username=user.username,
+            action="EXTERNAL_CASE_IMPORTED",
+            case_id=case_id,
+            metadata_json={
+                "case_number": case_number,
+                "external_reference": ref,
+                "victim_name": import_in.victim_name,
+                "victim_contact": import_in.victim_contact,
+                "suspect_wallet": import_in.suspect_wallet,
                 "assigned_investigator_id": assigned_id
             }
         )

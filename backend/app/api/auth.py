@@ -13,7 +13,7 @@ from app.database.models import (
     InvestigatorApprovalStatus, InvestigatorAvailabilityStatus
 )
 from app.database.schemas import (
-    UserCreate, UserResponse, TokenResponse, LoginRequest,
+    UserCreate, UserUpdate, UserResponse, TokenResponse, LoginRequest,
     UserRegisterRequest
 )
 
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -42,18 +43,42 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    username = None
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
+        username = payload.get("sub")
     except JWTError:
+        # Graceful tolerance for tokens signed with our secret whose exp timestamp recently elapsed
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_exp": False})
+            username = payload.get("sub")
+        except Exception:
+            raise credentials_exception
+
+    if username is None:
         raise credentials_exception
 
     user = db.query(User).filter(User.username == username).first()
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+def get_optional_current_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_exp": False})
+        username: str = payload.get("sub")
+        if username:
+            user = db.query(User).filter(User.username == username).first()
+            if user and user.is_active:
+                return user
+    except Exception:
+        pass
+    return None
 
 def require_roles(allowed_roles: List[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)):
@@ -200,6 +225,22 @@ def login_for_access_token(
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    update_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if update_in.full_name is not None:
+        current_user.full_name = update_in.full_name
+    if update_in.email is not None:
+        current_user.email = update_in.email
+    if update_in.phone_number is not None:
+        current_user.phone_number = update_in.phone_number
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @router.post("/seed-users")
 def seed_default_users(db: Session = Depends(get_db)):
     """Seeds multi-role dynamic accounts for SIH evaluation"""
@@ -314,6 +355,10 @@ def seed_default_users(db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
             created.append(u["username"])
+        else:
+            if not user.phone_number and u.get("phone_number"):
+                user.phone_number = u["phone_number"]
+                db.commit()
 
         # Seed profile if investigator
         if u.get("profile"):

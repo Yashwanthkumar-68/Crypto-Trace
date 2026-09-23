@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FolderLock, Plus, Search, Filter, ArrowRight, ShieldAlert } from 'lucide-react';
+import { FolderLock, Plus, Search, Filter, ArrowRight, ShieldAlert, Building2, Link2 } from 'lucide-react';
 import { Case, User } from '../types';
 import { api } from '../services/api';
 import { TruthBadge } from '../components/TruthBadge';
+import { ImportExternalCaseModal } from '../components/ImportExternalCaseModal';
 
 interface CasesPageProps {
   currentUser: User | null;
@@ -16,15 +17,32 @@ export const CasesPage: React.FC<CasesPageProps> = ({
   onCreateNewCase
 }) => {
   const [cases, setCases] = useState<Case[]>([]);
+  const [caseSyndicates, setCaseSyndicates] = useState<Record<string, string>>({});
+  const [syndicateFilterOnly, setSyndicateFilterOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const loadCases = async () => {
     setLoading(true);
     try {
-      const list = await api.getCases();
+      const [list, syndicates] = await Promise.all([
+        api.getCases(),
+        api.getSyndicates().catch(() => [])
+      ]);
       setCases(list);
+      const tagMap: Record<string, string> = {};
+      if (Array.isArray(syndicates)) {
+        syndicates.forEach((syn) => {
+          if (syn.case_ids) {
+            syn.case_ids.forEach((cid) => {
+              tagMap[cid] = syn.syndicate_tag;
+            });
+          }
+        });
+      }
+      setCaseSyndicates(tagMap);
     } catch (err) {
       console.error(err);
     } finally {
@@ -37,8 +55,12 @@ export const CasesPage: React.FC<CasesPageProps> = ({
   }, []);
 
   const filteredCases = cases.filter((c) => {
-    const victim = c.victim_name || '';
+    if (syndicateFilterOnly && !caseSyndicates[c.case_id]) {
+      return false;
+    }
+    const victim = c.unregistered_victim_name || c.victim_name || '';
     const ref = c.complaint_reference || '';
+    const extRef = c.external_reference || '';
     const suspect = c.suspect_wallet || '';
     const title = c.title || '';
     const term = searchTerm.toLowerCase();
@@ -46,6 +68,7 @@ export const CasesPage: React.FC<CasesPageProps> = ({
     const matchesSearch =
       victim.toLowerCase().includes(term) ||
       ref.toLowerCase().includes(term) ||
+      extRef.toLowerCase().includes(term) ||
       suspect.toLowerCase().includes(term) ||
       title.toLowerCase().includes(term);
 
@@ -65,13 +88,25 @@ export const CasesPage: React.FC<CasesPageProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onCreateNewCase}
-          className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Fraud Complaint / Case</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {(currentUser?.role === 'INVESTIGATOR' || currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'ADMINISTRATOR') && (
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Import Physical FIR</span>
+            </button>
+          )}
+
+          <button
+            onClick={onCreateNewCase}
+            className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Fraud Complaint / Case</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters & Search */}
@@ -88,6 +123,18 @@ export const CasesPage: React.FC<CasesPageProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSyndicateFilterOnly(!syndicateFilterOnly)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+              syndicateFilterOnly
+                ? 'bg-red-50 text-red-700 border-red-300 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <Link2 className="w-3.5 h-3.5 text-red-600" />
+            <span>Crime Rings ({Object.keys(caseSyndicates).length})</span>
+          </button>
+
           <Filter className="w-3.5 h-3.5 text-slate-500" />
           <select
             value={statusFilter}
@@ -130,6 +177,22 @@ export const CasesPage: React.FC<CasesPageProps> = ({
                     <span className="font-bold text-[#1E293B] group-hover:text-blue-600 transition-colors">
                       {c.title || c.complaint_reference}
                     </span>
+                    {c.origin === 'EXTERNAL_IMPORT' ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                        <Building2 className="w-3 h-3 text-purple-600" />
+                        <span>FIR: {c.external_reference || 'External Import'}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        App Filing
+                      </span>
+                    )}
+                    {caseSyndicates[c.case_id] && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 flex items-center gap-1 font-mono">
+                        <Link2 className="w-3 h-3 text-red-600" />
+                        <span>{caseSyndicates[c.case_id]}</span>
+                      </span>
+                    )}
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                       {c.blockchain}
                     </span>
@@ -145,7 +208,7 @@ export const CasesPage: React.FC<CasesPageProps> = ({
                     Suspect: <span className="text-red-600 font-semibold">{c.suspect_wallet || 'Pending address'}</span>
                   </p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Victim: {c.victim_name || 'Anonymous Complainant'} • Reported Loss: {Number(c.amount_lost || 0).toLocaleString()} {c.currency || 'ETH'} • Incident: {c.incident_date ? new Date(c.incident_date).toLocaleDateString() : 'N/A'}
+                    Victim: {c.unregistered_victim_name || c.victim_name || 'Walk-in Complainant'}{c.unregistered_victim_contact ? ` (${c.unregistered_victim_contact})` : ''} • Reported Loss: {Number(c.amount_lost || 0).toLocaleString()} {c.currency || 'ETH'} • Incident: {c.incident_date ? new Date(c.incident_date).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               </div>
@@ -171,6 +234,16 @@ export const CasesPage: React.FC<CasesPageProps> = ({
           ))
         )}
       </div>
+
+      {/* External Case Import Modal */}
+      <ImportExternalCaseModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={(newCase) => {
+          loadCases();
+          onOpenCase(newCase.case_id);
+        }}
+      />
     </div>
   );
 };

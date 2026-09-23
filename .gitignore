@@ -55,4 +55,6 @@ Crypto-Trace-Claude/
 Crypto-Trace-Codex/
 Crypto-Trace-Gemini/
 .ai/scratch/
+scratch/
+*.bak
 

@@ -157,3 +157,73 @@ def test_risk_api_endpoints():
     case_data = case_res.json()
     assert case_data["case_id"] == "CASE-SIH2026-001"
     assert 0.0 <= case_data["risk_score"] <= 100.0
+
+def test_multidimensional_feature_extraction():
+    """Validates structural, temporal, DeFi, cross-chain, and GNN cluster feature extractions."""
+    import datetime
+    from unittest.mock import MagicMock
+
+    wallet = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F".lower()
+    t0 = datetime.datetime(2026, 9, 1, 10, 0, 0)
+    t1 = datetime.datetime(2026, 9, 1, 10, 15, 0)
+    t2 = datetime.datetime(2026, 9, 2, 14, 0, 0)
+
+    tx1 = MagicMock(
+        from_address="0xa11ce", to_address=wallet,
+        value_eth=5.0, timestamp=t0, transaction_type="native_transfer",
+        chain_id=1, gas_price=25e9
+    )
+    tx2 = MagicMock(
+        from_address=wallet, to_address="0xb0b",
+        value_eth=2.0, timestamp=t1, transaction_type="swap",
+        chain_id=1, gas_price=30e9
+    )
+    tx3 = MagicMock(
+        from_address=wallet, to_address="0xbridge",
+        value_eth=2.8, timestamp=t2, transaction_type="bridge_transfer",
+        chain_id=137, gas_price=40e9
+    )
+
+    labels = {
+        "0xbridge": MagicMock(entity_type=MagicMock(value="BRIDGE"), entity_name="Polygon Bridge"),
+        "0xa11ce": MagicMock(entity_type=MagicMock(value="MIXER"), entity_name="Tornado Cash")
+    }
+
+    features = FeatureExtractor.extract_wallet_features(
+        wallet_address=wallet,
+        transactions=[tx1, tx2, tx3],
+        labels_map=labels
+    )
+
+    # 1. Structural Graph Features
+    assert "betweenness_centrality" in features
+    assert "pagerank_score" in features
+    assert "clustering_coefficient" in features
+    assert "k_core_number" in features
+    assert "eigenvector_centrality" in features
+    assert 0.0 <= features["in_degree_ratio"] <= 1.0
+    assert 0.0 <= features["out_degree_ratio"] <= 1.0
+
+    # 2. Temporal Behavioral Features
+    assert features["tx_hour_entropy"] >= 0.0
+    assert features["inter_tx_interval_mean"] > 0.0
+    assert features["velocity_delta_7d"] >= 0.0
+    assert features["dormancy_score"] >= 0.0
+
+    # 3. DeFi-Specific Features
+    assert features["defi_protocol_diversity"] >= 1.0
+    assert "flash_loan_count" in features
+    assert "liquidity_pool_interaction" in features
+    assert "nft_transaction_ratio" in features
+    assert 0.0 <= features["gas_price_percentile"] <= 1.0
+
+    # 4. Cross-Chain Features
+    assert features["bridge_outflow_ratio"] > 0.5
+    assert features["multi_chain_presence_score"] >= 2.0
+    assert features["chain_hop_frequency"] >= 0.0
+
+    # 5. Risk-Cluster Features (GNN Output)
+    assert features["mixer_cluster_proximity"] > 0.5
+    assert "exchange_cluster_proximity" in features
+    assert "scam_cluster_proximity" in features
+

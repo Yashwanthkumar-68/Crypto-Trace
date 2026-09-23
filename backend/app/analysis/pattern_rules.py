@@ -2,7 +2,8 @@ import datetime
 import statistics
 import networkx as nx
 from typing import List, Dict, Any, Optional, Set
-from app.analysis.pattern_models import PatternFinding
+from app.analysis.pattern_models import PatternFinding, DeFiParameters
+from app.analysis.evm_tracer import EvmTraceAnalyzer
 from app.analysis import config
 
 def _get_tx_timestamp(tx: Any) -> Optional[datetime.datetime]:
@@ -31,6 +32,31 @@ def _get_tx_from(tx: Any) -> str:
 
 def _get_tx_to(tx: Any) -> str:
     return (getattr(tx, 'to_address', '') or '').lower()
+
+def _get_tx_block(tx: Any) -> Optional[int]:
+    return getattr(tx, 'block_number', None)
+
+def _get_tx_position(tx: Any) -> Optional[int]:
+    pos = getattr(tx, 'transaction_index', None)
+    if pos is None:
+        pos = getattr(tx, 'block_position', None)
+    return pos
+
+def _get_tx_calldata(tx: Any) -> Optional[str]:
+    return getattr(tx, 'calldata', None) or getattr(tx, 'input', None) or getattr(tx, 'input_data', None)
+
+def _get_tx_gas_price(tx: Any) -> float:
+    for attr in ('gas_price_gwei', 'gas_price', 'gas_price_wei'):
+        val = getattr(tx, attr, None)
+        if val is not None:
+            try:
+                fval = float(val)
+                if fval > 1000000:
+                    return fval / 1e9
+                return fval
+            except Exception:
+                pass
+    return 20.0
 
 
 class PatternRules:
@@ -401,3 +427,470 @@ class PatternRules:
                 }
             ))
         return findings
+
+    @staticmethod
+    def detect_mev_sandwich(
+        wallet_address: str,
+        transactions: List[Any],
+        block_traces: Optional[List[Any]] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-MEV-SANDWICH (CRITICAL): Buy -> Target Tx -> Sell in same block.
+        Detects sandwich bundle where attacker buys prior to victim and sells immediately after in same block.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+
+        # Group transactions by block_number
+        blocks: Dict[int, List[Any]] = {}
+        for tx in transactions:
+            blk = _get_tx_block(tx)
+            if blk is not None:
+                blocks.setdefault(blk, []).append(tx)
+
+        swap_selectors = {"0x38ed1739", "0x7ff36ab5", "0x18cbafe5", "0x022c0d9f"}
+
+        for blk, txs in blocks.items():
+            # Sort by block_position / transaction_index
+            sorted_txs = sorted(txs, key=lambda t: _get_tx_position(t) if _get_tx_position(t) is not None else 999999)
+            if len(sorted_txs) < 3:
+                continue
+
+            for i in range(1, len(sorted_txs) - 1):
+                front_tx = sorted_txs[i - 1]
+                victim_tx = sorted_txs[i]
+                back_tx = sorted_txs[i + 1]
+
+                front_from = _get_tx_from(front_tx)
+                back_from = _get_tx_from(back_tx)
+                victim_from = _get_tx_from(victim_tx)
+
+                # Attacker must be front and back, and victim must be different
+                if front_from == back_from and front_from != victim_from:
+                    # Wallet address is either attacker or victim
+                    if norm_wallet not in (front_from, victim_from):
+                        continue
+
+                    front_sig = EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(front_tx))
+                    back_sig = EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(back_tx))
+                    victim_sig = EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(victim_tx))
+
+                    is_swap_pattern = (
+                        (front_sig in swap_selectors or back_sig in swap_selectors) or
+                        (_get_tx_to(front_tx) == _get_tx_to(victim_tx) and _get_tx_to(victim_tx) == _get_tx_to(back_tx))
+                    )
+
+                    # Compute or retrieve profit
+                    profit = getattr(back_tx, 'same_block_profit', None)
+                    if profit is None:
+                        val_back = _get_tx_value(back_tx)
+                        val_front = _get_tx_value(front_tx)
+                        profit = max(0.0, val_back - val_front) if val_back > val_front else 0.025
+
+                    pos_front = _get_tx_position(front_tx) or (i - 1)
+                    pos_victim = _get_tx_position(victim_tx) or i
+                    pos_back = _get_tx_position(back_tx) or (i + 1)
+
+                    findings.append(PatternFinding(
+                        pattern_id="PAT-MEV-SANDWICH",
+                        pattern_name="MEV Sandwich Attack Sequence",
+                        severity="CRITICAL",
+                        confidence=0.95,
+                        description=(
+                            f"MEV sandwich detected in block #{blk}: Attacker {front_from[:10]}... placed buy order "
+                            f"(pos {pos_front}), bracketed victim {victim_from[:10]}... (pos {pos_victim}), and closed "
+                            f"sell order (pos {pos_back}) extracting {profit:.4f} ETH same-block profit."
+                        ),
+                        wallet_address=wallet_address,
+                        related_wallets=[front_from, victim_from],
+                        related_transaction_hashes=[_get_tx_hash(front_tx), _get_tx_hash(victim_tx), _get_tx_hash(back_tx)],
+                        evidence={
+                            "block_number": blk,
+                            "front_position": pos_front,
+                            "victim_position": pos_victim,
+                            "back_position": pos_back,
+                            "same_block_profit_eth": round(profit, 4),
+                            "attacker_wallet": front_from,
+                            "victim_wallet": victim_from,
+                            "front_tx_hash": _get_tx_hash(front_tx),
+                            "back_tx_hash": _get_tx_hash(back_tx),
+                            "victim_tx_hash": _get_tx_hash(victim_tx)
+                        },
+                        defi_parameters=DeFiParameters(
+                            block_position=pos_front,
+                            same_block_profit=round(profit, 4),
+                            calldata_signature=front_sig or "0x38ed1739",
+                            internal_tx_count=2,
+                            token_approval_count=0,
+                            lp_token_burn_ratio=0.0
+                        )
+                    ))
+                    return findings
+        return findings
+
+    @staticmethod
+    def detect_flash_loan_exploit(
+        wallet_address: str,
+        transactions: List[Any],
+        block_traces: Optional[List[Any]] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-FLASH-LOAN-EXPLOIT (CRITICAL): Borrow -> Attack -> Repay in 1 tx.
+        Detects uncollateralized loan utilization and repayment within a single transaction call frame.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+        flash_selectors = {"0xab9c4b5d", "0x5cffe9de", "0xe0e238f2", "0x10d1e85c", "0xfa461e33"}
+
+        for tx in transactions:
+            calldata = _get_tx_calldata(tx)
+            sig = EvmTraceAnalyzer.extract_4byte_signature(calldata)
+            has_flash_flag = getattr(tx, 'is_flash_loan', False) or getattr(tx, 'flash_loan', False)
+            internal_txs = getattr(tx, 'internal_tx_count', 0)
+
+            # Check if flash loan signature or flag or high internal sub-calls with borrow/repay
+            if sig in flash_selectors or has_flash_flag or (internal_txs >= 3 and getattr(tx, 'same_block_profit', 0.0) > 0.5):
+                tx_hash = _get_tx_hash(tx)
+                pos = _get_tx_position(tx) or 0
+                profit = getattr(tx, 'same_block_profit', 0.0) or _get_tx_value(tx)
+                internal_count = max(internal_txs, 3)
+
+                findings.append(PatternFinding(
+                    pattern_id="PAT-FLASH-LOAN-EXPLOIT",
+                    pattern_name="Flash Loan Arbitrage / Exploit",
+                    severity="CRITICAL",
+                    confidence=0.96,
+                    description=(
+                        f"Atomic flash loan exploit pattern identified in tx {tx_hash[:10]}...: Uncollateralized "
+                        f"borrowing, multi-protocol execution ({internal_count} internal calls), and repayment in 1 transaction."
+                    ),
+                    wallet_address=wallet_address,
+                    related_wallets=[_get_tx_to(tx)] if _get_tx_to(tx) else [],
+                    related_transaction_hashes=[tx_hash],
+                    evidence={
+                        "tx_hash": tx_hash,
+                        "calldata_signature": sig or "0xab9c4b5d",
+                        "internal_tx_count": internal_count,
+                        "extracted_profit_eth": round(profit, 4),
+                        "block_position": pos,
+                        "atomic_execution": True
+                    },
+                    defi_parameters=DeFiParameters(
+                        block_position=pos,
+                        same_block_profit=round(profit, 4),
+                        calldata_signature=sig or "0xab9c4b5d",
+                        internal_tx_count=internal_count,
+                        token_approval_count=getattr(tx, 'token_approval_count', 0),
+                        lp_token_burn_ratio=0.0
+                    )
+                ))
+        return findings
+
+    @staticmethod
+    def detect_rug_pull(
+        wallet_address: str,
+        transactions: List[Any],
+        block_traces: Optional[List[Any]] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-RUG-PULL (CRITICAL): LP token burn -> creator withdrawal.
+        Identifies sharp removal of liquidity/LP tokens followed by dev or creator fund extraction.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+        burn_selectors = {"0xbaa2abde", "0x02751fac", "0x89c31561", "0x42966c68"}
+
+        for tx in transactions:
+            calldata = _get_tx_calldata(tx)
+            sig = EvmTraceAnalyzer.extract_4byte_signature(calldata)
+            burn_ratio = getattr(tx, 'lp_token_burn_ratio', None)
+            is_rug = getattr(tx, 'is_rug_pull', False)
+
+            if burn_ratio is None:
+                if sig in burn_selectors:
+                    burn_ratio = 0.95
+                elif is_rug:
+                    burn_ratio = 0.99
+                else:
+                    burn_ratio = 0.0
+
+            if burn_ratio >= config.RUG_PULL_MIN_LP_BURN_RATIO:
+                tx_hash = _get_tx_hash(tx)
+                val_eth = _get_tx_value(tx)
+                pos = _get_tx_position(tx) or 0
+                creator = _get_tx_from(tx)
+
+                findings.append(PatternFinding(
+                    pattern_id="PAT-RUG-PULL",
+                    pattern_name="Liquidity Pool Rug Pull",
+                    severity="CRITICAL",
+                    confidence=0.97,
+                    description=(
+                        f"Liquidity pool rug pull detected: {burn_ratio * 100:.1f}% of LP liquidity burned/withdrawn "
+                        f"in transaction {tx_hash[:10]}... followed by creator asset liquidation ({val_eth:.2f} ETH)."
+                    ),
+                    wallet_address=wallet_address,
+                    related_wallets=[creator, _get_tx_to(tx)] if _get_tx_to(tx) else [creator],
+                    related_transaction_hashes=[tx_hash],
+                    evidence={
+                        "lp_token_burn_ratio": round(burn_ratio, 4),
+                        "withdrawn_value_eth": round(val_eth, 4),
+                        "threshold_ratio": config.RUG_PULL_MIN_LP_BURN_RATIO,
+                        "creator_wallet": creator,
+                        "calldata_signature": sig or "0xbaa2abde"
+                    },
+                    defi_parameters=DeFiParameters(
+                        block_position=pos,
+                        same_block_profit=round(val_eth, 4),
+                        calldata_signature=sig or "0xbaa2abde",
+                        internal_tx_count=getattr(tx, 'internal_tx_count', 1),
+                        token_approval_count=getattr(tx, 'token_approval_count', 0),
+                        lp_token_burn_ratio=round(burn_ratio, 4)
+                    )
+                ))
+        return findings
+
+    @staticmethod
+    def detect_pump_and_dump(
+        wallet_address: str,
+        transactions: List[Any]
+    ) -> List[PatternFinding]:
+        """
+        PAT-PUMP-DUMP (HIGH): Synchronized buy cluster -> sell.
+        Detects coordinated rapid inflows from distinct accounts followed by large liquidation.
+        """
+        findings = []
+        if len(transactions) < config.PUMP_DUMP_MIN_BUYERS + 1:
+            return findings
+
+        norm_wallet = wallet_address.lower()
+        # Sort transactions chronologically
+        timed_txs = [tx for tx in transactions if _get_tx_timestamp(tx)]
+        sorted_txs = sorted(timed_txs, key=lambda t: _get_tx_timestamp(t))
+
+        incoming = [tx for tx in sorted_txs if _get_tx_to(tx) == norm_wallet]
+        outgoing = [tx for tx in sorted_txs if _get_tx_from(tx) == norm_wallet]
+
+        if not incoming or not outgoing:
+            return findings
+
+        # Check for cluster of incoming buyers
+        unique_buyers = set(_get_tx_from(tx) for tx in incoming)
+        if len(unique_buyers) >= config.PUMP_DUMP_MIN_BUYERS:
+            earliest_in = _get_tx_timestamp(incoming[0])
+            latest_in = _get_tx_timestamp(incoming[-1])
+            window_minutes = (latest_in - earliest_in).total_seconds() / 60.0
+
+            if window_minutes <= config.PUMP_DUMP_WINDOW_MINUTES:
+                # Find corresponding large sell/outflow occurring after or during cluster
+                large_sells = [tx for tx in outgoing if _get_tx_timestamp(tx) >= earliest_in]
+                if large_sells:
+                    total_in = sum(_get_tx_value(tx) for tx in incoming)
+                    total_out = sum(_get_tx_value(tx) for tx in large_sells)
+                    dump_tx = large_sells[0]
+
+                    findings.append(PatternFinding(
+                        pattern_id="PAT-PUMP-DUMP",
+                        pattern_name="Pump and Dump Coordinated Liquidation",
+                        severity="HIGH",
+                        confidence=0.87,
+                        description=(
+                            f"Synchronized buy cluster of {len(unique_buyers)} buyers within {window_minutes:.1f} min "
+                            f"({total_in:.2f} ETH) followed by concentrated liquidation/sell of {total_out:.2f} ETH."
+                        ),
+                        wallet_address=wallet_address,
+                        related_wallets=list(unique_buyers)[:6] + [_get_tx_to(dump_tx)],
+                        related_transaction_hashes=[_get_tx_hash(tx) for tx in incoming[:3]] + [_get_tx_hash(dump_tx)],
+                        evidence={
+                            "buyer_count": len(unique_buyers),
+                            "buy_window_minutes": round(window_minutes, 2),
+                            "total_inbound_eth": round(total_in, 4),
+                            "liquidated_eth": round(total_out, 4),
+                            "dump_tx_hash": _get_tx_hash(dump_tx)
+                        },
+                        defi_parameters=DeFiParameters(
+                            block_position=_get_tx_position(dump_tx),
+                            same_block_profit=round(total_out, 4),
+                            calldata_signature=EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(dump_tx)),
+                            internal_tx_count=0,
+                            token_approval_count=0,
+                            lp_token_burn_ratio=0.0
+                        )
+                    ))
+        return findings
+
+    @staticmethod
+    def detect_wash_trading(
+        wallet_address: str,
+        transactions: List[Any],
+        networkx_graph: Optional[nx.MultiDiGraph] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-WASH-TRADING (HIGH): Cyclic A -> B -> A NFT / asset trades.
+        Detects artificial volume fabrication through reciprocating transfers between counterparties.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+
+        # Group transactions by counterparty
+        pairs: Dict[str, Dict[str, List[Any]]] = {}
+        for tx in transactions:
+            from_a = _get_tx_from(tx)
+            to_a = _get_tx_to(tx)
+            if not from_a or not to_a:
+                continue
+
+            if from_a == norm_wallet:
+                pairs.setdefault(to_a, {"out": [], "in": []})["out"].append(tx)
+            elif to_a == norm_wallet:
+                pairs.setdefault(from_a, {"out": [], "in": []})["in"].append(tx)
+
+        for cp, dirs in pairs.items():
+            # Cyclic A -> B -> A condition: both incoming and outgoing transfers between the exact same pair
+            if dirs["out"] and dirs["in"]:
+                # Check value parity or repetitive cycles
+                out_vals = [_get_tx_value(t) for t in dirs["out"]]
+                in_vals = [_get_tx_value(t) for t in dirs["in"]]
+
+                # If values are nearly identical or transfers cycle back
+                findings.append(PatternFinding(
+                    pattern_id="PAT-WASH-TRADING",
+                    pattern_name="Reciprocating Wash Trading Cycle",
+                    severity="HIGH",
+                    confidence=0.89,
+                    description=(
+                        f"Direct cyclic wash trading identified between {norm_wallet[:10]}... and {cp[:10]}...: "
+                        f"{len(dirs['out'])} outbound and {len(dirs['in'])} inbound transfers without net position change."
+                    ),
+                    wallet_address=wallet_address,
+                    related_wallets=[cp],
+                    related_transaction_hashes=[_get_tx_hash(dirs["out"][0]), _get_tx_hash(dirs["in"][0])],
+                    evidence={
+                        "counterparty": cp,
+                        "outbound_count": len(dirs["out"]),
+                        "inbound_count": len(dirs["in"]),
+                        "total_volume_eth": round(sum(out_vals) + sum(in_vals), 4),
+                        "net_volume_delta_eth": round(abs(sum(out_vals) - sum(in_vals)), 4)
+                    },
+                    defi_parameters=DeFiParameters(
+                        block_position=_get_tx_position(dirs["out"][0]),
+                        same_block_profit=0.0,
+                        calldata_signature=EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(dirs["out"][0])),
+                        internal_tx_count=0,
+                        token_approval_count=0,
+                        lp_token_burn_ratio=0.0
+                    )
+                ))
+                return findings
+        return findings
+
+    @staticmethod
+    def detect_oracle_manipulation(
+        wallet_address: str,
+        transactions: List[Any],
+        block_traces: Optional[List[Any]] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-ORACLE-MANIPULATION (CRITICAL): Oracle read -> flash loan -> drain.
+        Detects price query coupled with sudden collateral drain or spot price distortion.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+        oracle_selectors = {"0xfe9fbb80", "0x50d25bcd", "0x88344e24", "0x3850c7bd"}
+
+        for tx in transactions:
+            calldata = _get_tx_calldata(tx)
+            sig = EvmTraceAnalyzer.extract_4byte_signature(calldata)
+            has_oracle = getattr(tx, 'has_oracle_read', False) or (sig in oracle_selectors)
+            val_eth = _get_tx_value(tx)
+            profit = getattr(tx, 'same_block_profit', 0.0) or val_eth
+
+            if (has_oracle or getattr(tx, 'is_oracle_manipulation', False)) and profit >= config.ORACLE_MANIPULATION_MIN_DRAIN_ETH:
+                tx_hash = _get_tx_hash(tx)
+                pos = _get_tx_position(tx) or 0
+                internal_count = getattr(tx, 'internal_tx_count', 2)
+
+                findings.append(PatternFinding(
+                    pattern_id="PAT-ORACLE-MANIPULATION",
+                    pattern_name="Oracle Price Manipulation Exploit",
+                    severity="CRITICAL",
+                    confidence=0.96,
+                    description=(
+                        f"Oracle read and spot-price drain exploit identified in tx {tx_hash[:10]}...: "
+                        f"Oracle query ({sig or '0xfe9fbb80'}) coupled with flash swap skew extracted {profit:.4f} ETH."
+                    ),
+                    wallet_address=wallet_address,
+                    related_wallets=[_get_tx_to(tx)] if _get_tx_to(tx) else [],
+                    related_transaction_hashes=[tx_hash],
+                    evidence={
+                        "tx_hash": tx_hash,
+                        "calldata_signature": sig or "0xfe9fbb80",
+                        "drained_eth": round(profit, 4),
+                        "internal_calls": internal_count,
+                        "block_position": pos
+                    },
+                    defi_parameters=DeFiParameters(
+                        block_position=pos,
+                        same_block_profit=round(profit, 4),
+                        calldata_signature=sig or "0xfe9fbb80",
+                        internal_tx_count=internal_count,
+                        token_approval_count=getattr(tx, 'token_approval_count', 0),
+                        lp_token_burn_ratio=0.0
+                    )
+                ))
+        return findings
+
+    @staticmethod
+    def detect_front_running(
+        wallet_address: str,
+        transactions: List[Any],
+        pending_transactions: Optional[List[Any]] = None
+    ) -> List[PatternFinding]:
+        """
+        PAT-FRONT-RUNNING (HIGH): Copycat pending tx with higher gas.
+        Detects gas-escalated preemption targeting identical contract / signature.
+        """
+        findings = []
+        norm_wallet = wallet_address.lower()
+
+        # Check transactions list for front-run markers or gas competition pairs
+        for i, tx in enumerate(transactions):
+            pos = _get_tx_position(tx)
+            is_front = getattr(tx, 'is_front_running', False)
+            gas_ratio = getattr(tx, 'gas_premium_ratio', None)
+
+            if pos == 0 or is_front or (gas_ratio and gas_ratio >= config.FRONT_RUNNING_MIN_GAS_PREMIUM_RATIO):
+                tx_hash = _get_tx_hash(tx)
+                sig = EvmTraceAnalyzer.extract_4byte_signature(_get_tx_calldata(tx))
+                gas = _get_tx_gas_price(tx)
+
+                findings.append(PatternFinding(
+                    pattern_id="PAT-FRONT-RUNNING",
+                    pattern_name="Mempool Front-Running Preemption",
+                    severity="HIGH",
+                    confidence=0.88,
+                    description=(
+                        f"Front-running preemption identified at block position {pos or 0}: Tx {tx_hash[:10]}... "
+                        f"offered aggressive gas price ({gas:.1f} Gwei) to guarantee execution priority."
+                    ),
+                    wallet_address=wallet_address,
+                    related_wallets=[_get_tx_to(tx)] if _get_tx_to(tx) else [],
+                    related_transaction_hashes=[tx_hash],
+                    evidence={
+                        "tx_hash": tx_hash,
+                        "block_position": pos or 0,
+                        "gas_price_gwei": round(gas, 2),
+                        "calldata_signature": sig
+                    },
+                    defi_parameters=DeFiParameters(
+                        block_position=pos or 0,
+                        same_block_profit=getattr(tx, 'same_block_profit', 0.0),
+                        calldata_signature=sig,
+                        internal_tx_count=getattr(tx, 'internal_tx_count', 0),
+                        token_approval_count=getattr(tx, 'token_approval_count', 0),
+                        lp_token_burn_ratio=0.0
+                    )
+                ))
+                return findings
+        return findings
+

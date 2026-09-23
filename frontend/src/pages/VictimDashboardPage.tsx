@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Plus, FileText, Download, UserCheck, ChevronRight, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { Case, User } from '../types';
+import { WalletVerificationWidget } from '../components/WalletVerificationWidget';
+import { CaseJourneyMap } from '../components/CaseJourneyMap';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface VictimDashboardPageProps {
   currentUser: User;
@@ -14,6 +17,7 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
   onOpenCase,
   onCreateNewCase
 }) => {
+  const { t } = useLanguage();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -68,15 +72,15 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase tracking-wide">
-                Citizen Victim Portal
+                {t('victim.portal_title', 'Citizen Victim Portal')}
               </span>
-              <span className="text-[11px] text-slate-400 font-mono">NCRP / I4C Interoperable</span>
+              <span className="text-[11px] text-slate-400 font-mono">{t('victim.interop_badge', 'NCRP / I4C Interoperable')}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Welcome, {currentUser.full_name || currentUser.username}
+              {t('victim.welcome', 'Welcome')}, {currentUser.full_name || currentUser.username}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Track real-time blockchain tracing progress, inspect exchange destination leads, and coordinate directly with your assigned Cybercrime Law Enforcement Officer.
+              {t('victim.desc', 'Track real-time blockchain tracing progress, inspect exchange destination leads, and coordinate directly with your assigned Cybercrime Law Enforcement Officer.')}
             </p>
           </div>
 
@@ -85,7 +89,7 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
             className="self-start md:self-center flex items-center gap-2 px-5 py-2.5 bg-[#2563EB] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
-            File New Complaint
+            {t('nav.file_complaint', 'File New Complaint')}
           </button>
         </div>
 
@@ -115,6 +119,9 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Citizen Pre-Transfer Wallet Scam Check Widget */}
+      <WalletVerificationWidget onFileComplaint={onCreateNewCase} />
 
       {/* Search and List Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -232,20 +239,13 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
                   </div>
                 </div>
 
-                {/* Progress Stepper Bar */}
-                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-4 gap-2 text-center text-[10px] font-medium">
-                  <div className={`p-1.5 rounded-lg border ${['ASSIGNED', 'ACCEPTED', 'UNDER_INVESTIGATION', 'RESOLVED', 'CLOSED'].includes(c.status) ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    1. Registered
-                  </div>
-                  <div className={`p-1.5 rounded-lg border ${['ACCEPTED', 'UNDER_INVESTIGATION', 'RESOLVED', 'CLOSED'].includes(c.status) ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    2. Accepted by Officer
-                  </div>
-                  <div className={`p-1.5 rounded-lg border ${['UNDER_INVESTIGATION', 'RESOLVED', 'CLOSED'].includes(c.status) ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    3. Blockchain Tracing
-                  </div>
-                  <div className={`p-1.5 rounded-lg border ${['RESOLVED', 'CLOSED'].includes(c.status) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    4. Legal Recovery
-                  </div>
+                {/* AI-Agent Driven Forensic Journey Map */}
+                <div className="mt-4 pt-3 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+                  <CaseJourneyMap
+                    caseData={c}
+                    compact={true}
+                    onOpenCaseDetail={onOpenCase}
+                  />
                 </div>
               </div>
             );

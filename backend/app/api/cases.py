@@ -1,7 +1,7 @@
 import datetime
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Response
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.database.models import (
@@ -9,23 +9,99 @@ from app.database.models import (
     RiskAssessmentRecord, AnalysisPattern, PriorityItem, CaseAssignment
 )
 from app.database.schemas import (
-    CaseCreate, CaseUpdate, CaseResponse, NoteCreate, NoteResponse,
+    CaseCreate, CaseUpdate, CaseResponse, ExternalCaseImportRequest, NoteCreate, NoteResponse,
     EvidenceCreate, EvidenceResponse, CaseAssignmentResponse,
-    CaseRecommendationsResponse
+    CaseRecommendationsResponse, ScamCampaignTimelineResponse, RealWorldEventCreate
 )
 from app.api.auth import get_current_user, require_roles
+from app.config import settings
 from app.services.case_service import CaseService
-from app.services.demo_service import DemoService
+import logging
+from app.services import supabase_service
+from app.services.sms_service import SMSService
+from app.services.cross_case_service import CrossCaseIntelligenceService
+
+logger = logging.getLogger("sih26183.cases")
 
 router = APIRouter(prefix="/cases", tags=["Case Management"])
+
+@router.post("/import", response_model=CaseResponse)
+def import_external_case(
+    import_in: ExternalCaseImportRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.INVESTIGATOR, UserRole.SUPERVISOR, UserRole.ADMINISTRATOR]))
+):
+    """
+    Law Enforcement endpoint for registering physical cyber crime complaints
+    filed directly at the police station / cyber cell without requiring an app account.
+    """
+    case = CaseService.import_external_case(db, import_in, current_user)
+    try:
+        CrossCaseIntelligenceService.scan_and_link(db, case)
+    except Exception as e:
+        logger.error(f"[CrossCase] Error scanning links on case import: {e}")
+
+    if case.assigned_investigator_id:
+        inv_user = db.query(User).filter(User.id == case.assigned_investigator_id).first()
+        target_phone = (inv_user.phone_number if inv_user and inv_user.phone_number else None) or settings.DEFAULT_ALERT_PHONE_NUMBER
+        inv_name = inv_user.full_name if inv_user else "Forensic Officer"
+        if target_phone:
+            background_tasks.add_task(
+                SMSService.send_new_case_sms,
+                recipient_phone=target_phone,
+                recipient_name=inv_name,
+                case_id=case.case_id,
+                case_number=case.case_number or case.case_id,
+                victim_name=case.unregistered_victim_name or case.victim_name,
+                amount=case.amount_lost,
+                currency=case.currency,
+                blockchain=case.blockchain,
+                suspect_wallet=case.suspect_wallet
+            )
+    return case
 
 @router.post("", response_model=CaseResponse)
 def create_case(
     case_in: CaseCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return CaseService.create_case(db, case_in, current_user)
+    case = CaseService.create_case(db, case_in, current_user)
+    try:
+        CrossCaseIntelligenceService.scan_and_link(db, case)
+    except Exception as e:
+        logger.error(f"[CrossCase] Error scanning links on case create: {e}")
+
+    # Fire Supabase real-time notification to assigned investigator
+    if case.assigned_investigator_id:
+        background_tasks.add_task(
+            supabase_service.notify_investigator_assigned,
+            investigator_id=case.assigned_investigator_id,
+            case_id=case.case_id,
+            victim_name=case.victim_name,
+            amount=case.amount_lost
+        )
+
+        # Fire SMS alert to assigned investigator's mobile number
+        inv_user = db.query(User).filter(User.id == case.assigned_investigator_id).first()
+        target_phone = (inv_user.phone_number if inv_user and inv_user.phone_number else None) or settings.DEFAULT_ALERT_PHONE_NUMBER
+        inv_name = inv_user.full_name if inv_user else "Forensic Officer"
+        if target_phone:
+            background_tasks.add_task(
+                SMSService.send_new_case_sms,
+                recipient_phone=target_phone,
+                recipient_name=inv_name,
+                case_id=case.case_id,
+                case_number=case.case_number or case.case_id,
+                victim_name=case.victim_name,
+                amount=case.amount_lost,
+                currency=case.currency,
+                blockchain=case.blockchain,
+                suspect_wallet=case.suspect_wallet
+            )
+    return case
 
 @router.get("", response_model=List[CaseResponse])
 def get_cases(
@@ -311,6 +387,44 @@ def get_case_timeline(
     from app.services.timeline_service import TimelineService
     return TimelineService.get_timeline(db, case_id)
 
+@router.get("/{case_id}/campaign-timeline", response_model=ScamCampaignTimelineResponse)
+def get_case_campaign_timeline(
+    case_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reconstructs the complete chronology of a crypto fraud by combining:
+    1. Real-World human events (Victim approached, money sent, phishing inducement)
+    2. Blockchain ledger events (Wallet A received, Wallet A -> B, Wallet B -> C)
+    3. Multi-victim syndicate correlation events (Other victims reporting, campaign identified)
+    4. Official police / cyber cell milestones (Section 91 CrPC notice, case registration)
+    """
+    case = CaseService.get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+    from app.services.timeline_service import TimelineService
+    return TimelineService.get_scam_campaign_timeline(db, case_id)
+
+@router.post("/{case_id}/events")
+def add_case_real_world_event(
+    case_id: str,
+    event_in: RealWorldEventCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows investigators or victims to record real-world timeline events
+    (e.g., contacted on Telegram, received spoofed bank call, clicked airdrop URL).
+    """
+    case = CaseService.get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+    from app.services.timeline_service import TimelineService
+    return TimelineService.add_real_world_event(
+        db, case_id, event_in, actor=current_user.full_name or current_user.username
+    )
+
 @router.get("/{case_id}/evidence", response_model=List[EvidenceResponse])
 def get_case_evidence_items(
     case_id: str,
@@ -360,6 +474,7 @@ def update_case_status(
     case_id: str,
     payload: Optional[CaseStatusUpdateRequest] = None,
     new_status: Optional[str] = Query(None, description="Target status name"),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.INVESTIGATOR, UserRole.SUPERVISOR, UserRole.ADMINISTRATOR]))
 ):
@@ -409,7 +524,32 @@ def update_case_status(
         description=f"Case status updated to {status_clean} by {current_user.full_name} ({current_user.role.value})." + (f" Note: {note_text}" if note_text else ""),
         actor=current_user.username
     )
+
+    # --- Supabase Real-Time Notifications ---
+    if background_tasks:
+        # Investigator sends to Supervisor Review → notify supervisor
+        if status_clean == "SUPERVISOR_REVIEW":
+            supervisor = db.query(User).filter(User.role == UserRole.SUPERVISOR).first()
+            if supervisor:
+                background_tasks.add_task(
+                    supabase_service.notify_supervisor_review,
+                    supervisor_id=supervisor.id,
+                    case_id=case_id,
+                    investigator_name=current_user.full_name
+                )
+
+        # Supervisor approves → notify victim
+        if status_clean in ("RESOLVED", "CLOSED"):
+            if case.victim_id:
+                background_tasks.add_task(
+                    supabase_service.notify_victim_case_resolved,
+                    victim_id=case.victim_id,
+                    case_id=case_id,
+                    investigator_name=case.assigned_investigator.full_name if case.assigned_investigator else "Investigator"
+                )
+
     return case
+
 
 @router.post("/{case_id}/transactions/sync")
 def sync_case_transactions(
@@ -483,6 +623,65 @@ def export_sahyog_format(
         raise HTTPException(status_code=404, detail="Case not found or access denied")
     from app.integrations.ncrp_adapter import NCRPAdapter
     return NCRPAdapter.export_sahyog_format(case, db)
+
+
+@router.get("/{case_id}/subpoena/{wallet_address}")
+def generate_wallet_subpoena(
+    case_id: str,
+    wallet_address: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates and downloads an official Statutory Subpoena Notice under Section 94 BNSS, 2023 /
+    Section 91 CrPC, 1973 directing VASPs / Exchanges to freeze the target wallet and furnish KYC/IP ledgers.
+    """
+    case = CaseService.get_case_by_id(db, case_id, current_user)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found or access denied")
+
+    from app.services.subpoena_service import SubpoenaService
+
+    # Resolve investigating officer details
+    inv_name = current_user.full_name or "Investigating Officer"
+    inv_designation = "Lead Cyber Crime Forensics Investigator"
+    if case.assigned_investigator:
+        inv_name = case.assigned_investigator.full_name or inv_name
+        inv_designation = getattr(case.assigned_investigator, 'specialization', None) or inv_designation
+
+    victim_name = case.unregistered_victim_name or case.victim_name or "Complainant Complainant"
+    amount_lost = float(case.amount_lost) if case.amount_lost else 0.0
+    currency = case.currency or "INR"
+    blockchain = case.blockchain or "Ethereum"
+    incident_date = str(case.incident_date or case.created_at or "")
+    external_fir = case.external_reference or case.case_number or f"FIR-NCRP-{case.case_id}"
+
+    pdf_bytes = SubpoenaService.generate_subpoena_pdf(
+        case_id=case.case_id,
+        case_number=case.case_number or case.case_id,
+        wallet_address=wallet_address,
+        blockchain=blockchain,
+        investigator_name=inv_name,
+        investigator_designation=inv_designation,
+        victim_name=victim_name,
+        amount_lost=amount_lost,
+        currency=currency,
+        incident_date=incident_date,
+        external_fir=external_fir
+    )
+
+    clean_short_wallet = wallet_address[:10] if len(wallet_address) >= 10 else wallet_address
+    filename = f"Subpoena_Sec94_BNSS_{case.case_id}_{clean_short_wallet}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
+
 
 
 

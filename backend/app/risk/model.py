@@ -3,7 +3,12 @@ import joblib
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from sklearn.ensemble import RandomForestClassifier
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    SKLEARN_AVAILABLE = True
+except Exception:
+    RandomForestClassifier = None
+    SKLEARN_AVAILABLE = False
 
 MODEL_PATH = Path(__file__).resolve().parent.parent.parent.parent / "ml" / "models" / "risk_rf_model.joblib"
 
@@ -14,6 +19,7 @@ class MLRiskClassifier:
     Trained on synthetic demonstration topologies without unverified real-world accuracy claims.
     """
     FEATURE_NAMES = [
+        # Baseline features
         "transaction_count",
         "unique_counterparties",
         "incoming_value",
@@ -25,11 +31,45 @@ class MLRiskClassifier:
         "fund_concentration_score",
         "high_risk_connections",
         "cross_chain_indicator",
-        "rapid_movement_indicator"
+        "rapid_movement_indicator",
+
+        # Structural Graph Features
+        "betweenness_centrality",
+        "pagerank_score",
+        "clustering_coefficient",
+        "k_core_number",
+        "eigenvector_centrality",
+        "in_degree_ratio",
+        "out_degree_ratio",
+
+        # Temporal Behavioral Features
+        "tx_hour_entropy",
+        "inter_tx_interval_mean",
+        "inter_tx_interval_std",
+        "day_of_week_concentration",
+        "velocity_delta_7d",
+        "dormancy_score",
+
+        # DeFi-Specific Features
+        "defi_protocol_diversity",
+        "flash_loan_count",
+        "liquidity_pool_interaction",
+        "nft_transaction_ratio",
+        "gas_price_percentile",
+
+        # Cross-Chain Features
+        "bridge_outflow_ratio",
+        "multi_chain_presence_score",
+        "chain_hop_frequency",
+
+        # Risk-Cluster Features (GNN Output)
+        "mixer_cluster_proximity",
+        "exchange_cluster_proximity",
+        "scam_cluster_proximity"
     ]
 
     MODEL_NAME = "RandomForestClassifier"
-    MODEL_VERSION = "1.0.0-demo"
+    MODEL_VERSION = "2.0.0-multidimensional"
 
     def __init__(self, auto_init: bool = True):
         self.model: Optional[RandomForestClassifier] = None
@@ -37,11 +77,16 @@ class MLRiskClassifier:
             self._load_or_train_baseline()
 
     def _load_or_train_baseline(self):
+        if not SKLEARN_AVAILABLE:
+            self.model = None
+            return
         MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
         if MODEL_PATH.exists():
             try:
-                self.model = joblib.load(MODEL_PATH)
-                return
+                loaded = joblib.load(MODEL_PATH)
+                if hasattr(loaded, "n_features_in_") and loaded.n_features_in_ == len(self.FEATURE_NAMES):
+                    self.model = loaded
+                    return
             except Exception:
                 pass
 
@@ -49,21 +94,41 @@ class MLRiskClassifier:
             # Train transparent synthetic demonstration baseline model
             np.random.seed(42)
             n_samples = 400
+            n_features = len(self.FEATURE_NAMES)
 
-            # Normal wallet distribution
+            # Baseline mean vectors for normal vs suspicious profiles
+            normal_locs = [
+                10, 8, 1.0, 0.8, 0.1, 100.0, 1.0, 0.1, 0.1, 0.0, 0.0, 0.0,  # Baseline 12
+                0.01, 0.05, 0.1, 1.0, 0.05, 0.4, 0.4,                      # Structural
+                3.5, 3600.0, 500.0, 0.25, 1.0, 10.0,                       # Temporal
+                1.0, 0.0, 0.0, 0.05, 0.3,                                  # DeFi
+                0.0, 1.0, 0.0,                                             # Cross-chain
+                0.0, 0.2, 0.0                                              # GNN clusters
+            ]
+            normal_scales = [0.1 * l + 0.01 for l in normal_locs]
+
+            suspicious_locs = [
+                40, 25, 15.0, 14.8, 2.5, 5.0, 3.5, 0.8, 0.2, 1.5, 0.5, 0.9, # Baseline 12
+                0.25, 0.35, 0.65, 4.0, 0.45, 0.7, 0.8,                     # Structural
+                1.2, 120.0, 30.0, 0.65, 4.5, 120.0,                        # Temporal
+                4.0, 2.0, 5.0, 0.4, 0.85,                                  # DeFi
+                0.75, 3.0, 2.5,                                            # Cross-chain
+                0.85, 0.6, 0.75                                            # GNN clusters
+            ]
+            suspicious_scales = [0.15 * l + 0.02 for l in suspicious_locs]
+
             normal_feats = np.random.normal(
-                loc=[10, 8, 1.0, 0.8, 0.1, 100.0, 1.0, 0.1, 0.1, 0.0, 0.0, 0.0],
-                scale=[5, 3, 0.5, 0.4, 0.05, 50.0, 0.5, 0.05, 0.05, 0.0, 0.0, 0.0],
-                size=(n_samples // 2, len(self.FEATURE_NAMES))
+                loc=normal_locs,
+                scale=normal_scales,
+                size=(n_samples // 2, n_features)
             )
             normal_feats = np.clip(normal_feats, 0, None)
             normal_labels = np.zeros(n_samples // 2)
 
-            # Layering/mule wallet distribution
             suspicious_feats = np.random.normal(
-                loc=[40, 25, 15.0, 14.8, 2.5, 5.0, 3.5, 0.8, 0.2, 1.5, 0.5, 0.9],
-                scale=[10, 8, 5.0, 5.0, 1.0, 2.0, 1.0, 0.2, 0.1, 0.5, 0.5, 0.1],
-                size=(n_samples // 2, len(self.FEATURE_NAMES))
+                loc=suspicious_locs,
+                scale=suspicious_scales,
+                size=(n_samples // 2, n_features)
             )
             suspicious_feats = np.clip(suspicious_feats, 0, None)
             suspicious_labels = np.ones(n_samples // 2)
@@ -71,7 +136,7 @@ class MLRiskClassifier:
             X = np.vstack([normal_feats, suspicious_feats])
             y = np.concatenate([normal_labels, suspicious_labels])
 
-            rf = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
+            rf = RandomForestClassifier(n_estimators=50, max_depth=6, random_state=42)
             rf.fit(X, y)
             self.model = rf
             joblib.dump(rf, MODEL_PATH)

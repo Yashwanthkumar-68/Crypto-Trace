@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, PlusCircle, Shield, AlertCircle, Wallet, Hash, Layers, HelpCircle, UserCheck, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Shield, AlertCircle, Wallet, Hash, Layers, HelpCircle, UserCheck, CheckCircle2, Mic, Bot, Sparkles } from 'lucide-react';
 import { api } from '../services/api';
 import { User, CasePriority, AvailableInvestigator } from '../types';
+import { VoiceAssistant, ExtractedComplaintData } from '../components/VoiceAssistant';
 
 interface CreateCasePageProps {
   currentUser: User | null;
@@ -14,6 +15,10 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
   onCaseCreated,
   onCancel
 }) => {
+  // Input Mode: 'form' | 'voice'
+  const [inputMode, setInputMode] = useState<'form' | 'voice'>('form');
+  const [voiceExtractedNotice, setVoiceExtractedNotice] = useState<string | null>(null);
+
   // 4 Evidence Types: 'wallet' | 'tx_hash' | 'both' | 'none'
   const [evidenceType, setEvidenceType] = useState<'wallet' | 'tx_hash' | 'both' | 'none'>('wallet');
 
@@ -53,6 +58,31 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
     };
     fetchInvestigators();
   }, []);
+
+  const handleVoiceComplete = (data: ExtractedComplaintData) => {
+    if (data.victim_name) setVictimName(data.victim_name);
+    if (data.amount_lost) setAmountLost(String(data.amount_lost));
+    if (data.suspect_wallet) setSuspectWallet(data.suspect_wallet);
+    if (data.blockchain) setBlockchain(data.blockchain);
+    if (data.transaction_hash) setTxHash(data.transaction_hash);
+    if (data.statutory_fir_narrative || data.description) {
+      setDescription(data.statutory_fir_narrative || data.description);
+    }
+    if (data.investigator_id) {
+      setSelectedInvestigatorId(data.investigator_id);
+    }
+
+    if (data.suspect_wallet && data.transaction_hash) {
+      setEvidenceType('both');
+    } else if (data.transaction_hash) {
+      setEvidenceType('tx_hash');
+    } else {
+      setEvidenceType('wallet');
+    }
+
+    setInputMode('form');
+    setVoiceExtractedNotice('AI Voice Assistant successfully synthesized your complaint and drafted a formal Section 420 IPC / 66D IT Act narrative. Please review below and submit.');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +166,68 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
           </p>
         </div>
 
+        {/* Input Mode Selector Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+              <Bot className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-[#1E293B] flex items-center gap-1.5">
+                <span>Complaint Filing Mode:</span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                  SIH Innovation
+                </span>
+              </span>
+              <p className="text-[11px] text-slate-500">
+                Talk to our conversational AI assistant in Hindi/English, or fill out the traditional form.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold shadow-sm self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setInputMode('voice')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                inputMode === 'voice'
+                  ? 'bg-[#2563EB] text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>🎙️ Voice Assistant</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode('form')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                inputMode === 'form'
+                  ? 'bg-[#2563EB] text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>📝 Manual Form</span>
+            </button>
+          </div>
+        </div>
+
+        {voiceExtractedNotice && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-3 shadow-sm animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{voiceExtractedNotice}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVoiceExtractedNotice(null)}
+              className="text-[11px] font-bold text-emerald-700 hover:underline shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
@@ -143,7 +235,15 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5 text-xs">
+        {inputMode === 'voice' ? (
+          <VoiceAssistant
+            onComplete={handleVoiceComplete}
+            onCancel={() => setInputMode('form')}
+            defaultName={victimName}
+            availableInvestigators={availableInvestigators}
+          />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5 text-xs">
           {/* Step 1: Select Evidence Type */}
           <div>
             <label className="text-[#1E293B] font-bold block mb-2 text-xs">
@@ -436,6 +536,7 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

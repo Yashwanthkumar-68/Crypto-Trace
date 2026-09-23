@@ -16,9 +16,15 @@ import { PriorityQueueView } from './components/PriorityQueueView';
 import { MultiChainExplorer } from './components/MultiChainExplorer';
 import { MonitoringPage } from './pages/MonitoringPage';
 import { AdminPage } from './pages/AdminPage';
+import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
+import { BatchAnalysisPage } from './pages/BatchAnalysisPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { User } from './types';
 import { api } from './services/api';
+import { useWebSocket } from './services/useWebSocket';
+import { AlertToast, AlertToastItem } from './components/AlertToast';
+import { useSupabaseNotifications } from './hooks/useSupabaseNotifications';
+import { WalletVerificationWidget } from './components/WalletVerificationWidget';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -41,12 +47,66 @@ export function App() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>('CASE-SIH2026-001');
   const [inspectAddress, setInspectAddress] = useState<string>('');
   const [alertCount, setAlertCount] = useState<number>(0);
+  const [toastAlerts, setToastAlerts] = useState<AlertToastItem[]>([]);
+
+  const { lastMessage } = useWebSocket(currentUser?.id || null);
+  const { notifications: supabaseNotifs } = useSupabaseNotifications(currentUser?.id || null);
+
+  // Convert Supabase real-time push notifications into toast alerts
+  useEffect(() => {
+    if (supabaseNotifs.length === 0) return;
+    const latest = supabaseNotifs[0];
+    const severity =
+      latest.event_type === 'CASE_RESOLVED' ? 'info' :
+      latest.event_type === 'SUPERVISOR_REVIEW' ? 'warning' : 'critical';
+    const newToast: AlertToastItem = {
+      id: latest.id || Math.random().toString(36).substr(2, 9),
+      severity,
+      title: latest.event_type === 'CASE_ASSIGNED'
+        ? '🚨 New Case Assigned'
+        : latest.event_type === 'SUPERVISOR_REVIEW'
+        ? '📋 Case Ready for Review'
+        : '✅ Case Resolved',
+      message: latest.message,
+      caseId: latest.case_id,
+      timestamp: latest.created_at
+    };
+    setToastAlerts(prev => [newToast, ...prev]);
+    setAlertCount(prev => prev + 1);
+  }, [supabaseNotifs]);
+
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === 'alert') {
+      const alertData = lastMessage.data;
+      const newToast: AlertToastItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        severity: alertData.risk_level === 'CRITICAL' ? 'critical' : 'warning',
+        title: 'New Monitoring Alert',
+        message: alertData.reason,
+        timestamp: new Date().toISOString()
+      };
+      setToastAlerts(prev => [...prev, newToast]);
+      setAlertCount(prev => prev + 1);
+    }
+  }, [lastMessage]);
+
+  const handleDismissToast = (id: string) => {
+    setToastAlerts(prev => prev.filter(t => t.id !== id));
+  };
 
   useEffect(() => {
     if (currentUser) {
+      // Validate session with backend
+      api.getMe().catch((err: any) => {
+        const msg = String(err?.message || '');
+        if (msg.includes('validate credentials') || msg.includes('401') || msg.includes('Unauthorized') || msg.includes('Failed to retrieve user profile')) {
+          console.warn('Session expired or invalid, resetting credentials:', msg);
+          handleLogout();
+        }
+      });
       api.getAlerts(true).then((alerts) => setAlertCount(alerts.length)).catch(() => {});
     }
-  }, [currentUser, activeTab]);
+  }, [currentUser]);
 
   const handleLoginSuccess = (u: User) => {
     localStorage.setItem('sih_user', JSON.stringify(u));
@@ -155,7 +215,18 @@ export function App() {
             currentUser={currentUser}
             onBack={() => setActiveTab('cases')}
             onInspectWallet={handleInspectWallet}
+            onOpenCase={handleOpenCase}
           />
+        )}
+
+        {activeTab === 'verify_wallet' && (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <WalletVerificationWidget
+              onFileComplaint={() => {
+                setActiveTab('create_case');
+              }}
+            />
+          </div>
         )}
 
         {activeTab === 'wallets' && (
@@ -202,6 +273,14 @@ export function App() {
           <MonitoringPage />
         )}
 
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard />
+        )}
+
+        {activeTab === 'batch' && (
+          <BatchAnalysisPage />
+        )}
+
         {activeTab === 'admin' && (
           <AdminPage />
         )}
@@ -219,6 +298,7 @@ export function App() {
           </span>
         </div>
       </footer>
+      <AlertToast alerts={toastAlerts} onDismiss={handleDismissToast} />
     </div>
   );
 }

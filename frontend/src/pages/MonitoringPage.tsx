@@ -6,6 +6,7 @@ import {
 import { AlertItem, AlertRuleItem, CreateAlertRulePayload } from '../types';
 import { api } from '../services/api';
 import { TruthBadge } from '../components/TruthBadge';
+import { SchedulerDashboard } from '../components/SchedulerDashboard';
 
 export const MonitoringPage: React.FC = () => {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -259,6 +260,11 @@ export const MonitoringPage: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Embedded Phase 8: Automated Scheduled Monitoring */}
+      <div className="mt-8">
+        <SchedulerDashboard />
       </div>
 
       {/* Add Alert Rule Modal */}

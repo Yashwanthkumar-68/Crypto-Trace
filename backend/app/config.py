@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "sih26183_super_secret_forensic_investigation_jwt_key_2026"
     JWT_SECRET: Optional[str] = None
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
 
     # Database
     DATABASE_URL: str = os.getenv(
@@ -58,6 +58,26 @@ class Settings(BaseSettings):
 
     # Application Mode
     DEMO_MODE: bool = True
+
+    # AI Agents / LLM
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY", None)
+
+    # SMS Notifications (Fast2SMS / Twilio / MSG91 / Simulated)
+    FAST2SMS_API_KEY: Optional[str] = os.getenv("FAST2SMS_API_KEY", None)
+    TWILIO_ACCOUNT_SID: Optional[str] = os.getenv("TWILIO_ACCOUNT_SID", None)
+    TWILIO_AUTH_TOKEN: Optional[str] = os.getenv("TWILIO_AUTH_TOKEN", None)
+    TWILIO_PHONE_NUMBER: Optional[str] = os.getenv("TWILIO_PHONE_NUMBER", None)
+    MSG91_AUTH_KEY: Optional[str] = os.getenv("MSG91_AUTH_KEY", None)
+    DEFAULT_ALERT_PHONE_NUMBER: str = os.getenv("DEFAULT_ALERT_PHONE_NUMBER", "6304147149")
+
+    # GNN Parameters
+    GNN_EMBEDDING_DIM: int = 128
+    GNN_LAYERS: int = 3
+    GNN_ATTENTION_HEADS: int = 8
+    GNN_DROPOUT: float = 0.2
+    TEMPORAL_TIME_ENCODING_DIM: int = 64
+    EMBEDDING_SIMILARITY_THRESHOLD: float = 0.85
+    FAISS_INDEX_TYPE: str = "IVFFlat"
 
     class Config:
         env_file = ".env"

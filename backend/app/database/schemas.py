@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from .models import (
-    UserRole, CaseStatus, CasePriority, EntityType,
+    UserRole, CaseStatus, CasePriority, CaseOrigin, EntityType,
     ConfidenceLevel, FindingSeverity, ReportStatus
 )
 
@@ -17,6 +17,11 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
 
 class UserRegisterRequest(BaseModel):
     username: str
@@ -101,6 +106,25 @@ class CaseCreate(BaseModel):
     preferred_investigator_id: Optional[int] = None
     investigator_id: Optional[int] = None
     evidence_type: Optional[str] = "wallet"
+    origin: CaseOrigin = CaseOrigin.NATIVE_APP
+    external_reference: Optional[str] = None
+    unregistered_victim_name: Optional[str] = None
+    unregistered_victim_contact: Optional[str] = None
+
+class ExternalCaseImportRequest(BaseModel):
+    victim_name: str
+    victim_contact: Optional[str] = None
+    external_reference: str
+    title: Optional[str] = None
+    amount_lost: float
+    currency: str = "INR"
+    incident_date: Optional[datetime] = None
+    suspect_wallet: Optional[str] = None
+    blockchain: str = "Ethereum"
+    transaction_hash: Optional[str] = None
+    description: Optional[str] = None
+    priority: CasePriority = CasePriority.HIGH
+    assigned_investigator_id: Optional[int] = None
 
 class ComplaintCreateRequest(BaseModel):
     evidence_type: str = "wallet"  # "wallet" | "tx_hash" | "both" | "none"
@@ -189,6 +213,10 @@ class CaseResponse(BaseModel):
     transaction_hash: Optional[str] = None
     status: CaseStatus
     priority: CasePriority
+    origin: Optional[CaseOrigin] = CaseOrigin.NATIVE_APP
+    external_reference: Optional[str] = None
+    unregistered_victim_name: Optional[str] = None
+    unregistered_victim_contact: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     assigned_investigator_id: Optional[int] = None
@@ -466,3 +494,113 @@ class NoteResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Cross-Case Wallet Intelligence Schemas
+class LinkedCaseSummary(BaseModel):
+    case_id: str
+    case_number: Optional[str] = None
+    title: Optional[str] = None
+    victim_name: str
+    amount_lost: float
+    currency: str = "INR"
+    blockchain: str = "Ethereum"
+    status: str
+    priority: str
+    incident_date: Optional[datetime] = None
+    suspect_wallet: Optional[str] = None
+    assigned_investigator_name: Optional[str] = None
+
+class CaseLinkItem(BaseModel):
+    id: int
+    source_case_id: str
+    target_case_id: str
+    shared_wallet: str
+    link_type: str
+    confidence_score: float
+    syndicate_tag: Optional[str] = None
+    created_at: datetime
+    linked_case: LinkedCaseSummary
+
+class CaseSyndicateIntelResponse(BaseModel):
+    case_id: str
+    is_part_of_syndicate: bool
+    syndicate_tag: Optional[str] = None
+    total_linked_cases: int
+    total_victims: int
+    cumulative_loss_amount: float
+    currency: str = "INR"
+    shared_wallets: List[str]
+    links: List[CaseLinkItem]
+
+class GlobalSyndicateCluster(BaseModel):
+    syndicate_tag: str
+    root_wallet: str
+    case_count: int
+    victim_count: int
+    cumulative_loss: float
+    currency: str = "INR"
+    earliest_incident: Optional[datetime] = None
+    latest_incident: Optional[datetime] = None
+    case_ids: List[str]
+    linked_cases: List[LinkedCaseSummary]
+
+# Scam Campaign Timeline Schemas
+class ScamCampaignEvent(BaseModel):
+    id: str
+    category: str  # "REAL_WORLD", "BLOCKCHAIN", "SYNDICATE", "INVESTIGATION"
+    event_type: str
+    title: str
+    description: str
+    timestamp: datetime
+    channel: Optional[str] = None  # e.g. "Telegram", "WhatsApp", "Phone", "Ethereum", "Binance"
+    amount: Optional[float] = None
+    amount_display: Optional[str] = None
+    source_entity: Optional[str] = None
+    target_entity: Optional[str] = None
+    tx_hash: Optional[str] = None
+    actor: Optional[str] = "SYSTEM"
+    metadata: Optional[Dict[str, Any]] = None
+
+class ScamCampaignTimelineResponse(BaseModel):
+    case_id: str
+    case_number: Optional[str] = None
+    victim_name: str
+    suspect_wallet: Optional[str] = None
+    syndicate_tag: Optional[str] = None
+    total_events: int
+    real_world_events_count: int
+    blockchain_events_count: int
+    syndicate_events_count: int
+    events: List[ScamCampaignEvent]
+
+class RealWorldEventCreate(BaseModel):
+    title: str
+    description: str
+    timestamp: Optional[datetime] = None
+    channel: Optional[str] = "Telegram"
+    amount: Optional[float] = None
+    source_entity: Optional[str] = None
+    target_entity: Optional[str] = None
+
+# Wallet Scam Pre-Check Schemas (Citizen Fraud Prevention Check)
+class WalletVerificationRequest(BaseModel):
+    wallet_address: str
+    blockchain: Optional[str] = "Ethereum"
+
+class WalletVerificationResponse(BaseModel):
+    wallet_address: str
+    blockchain: str
+    risk_tier: str  # "CRITICAL", "HIGH", "CAUTION"
+    risk_score: float  # 0.0 - 100.0
+    is_flagged_in_complaints: bool
+    complaint_count: int
+    syndicate_detected: bool
+    syndicate_tag: Optional[str] = None
+    known_entity_label: Optional[str] = None
+    warning_title: str
+    warning_message: str
+    action_directive: str  # "DO_NOT_TRANSFER", "SUSPICIOUS_HIGH_RISK", "PROCEED_WITH_EXTREME_CAUTION"
+    safety_checklist: List[str]
+    inquiry_timestamp: datetime
+
+
