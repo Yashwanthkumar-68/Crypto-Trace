@@ -56,5 +56,8 @@ Crypto-Trace-Codex/
 Crypto-Trace-Gemini/
 .ai/scratch/
 scratch/
+# Presentation Decks
+*.pptx
+*.ppt
 *.bak
-
+backend/data/*.bak

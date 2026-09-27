@@ -1,4 +1,4 @@
-﻿<h1 align="center"> 🛡️ CryptoTrace (SIH-2026 / ID: 26183) </h1>
+<h1 align="center"> 🛡️ CryptoTrace (SIH-2026 / ID: 26183) </h1>
 <h3 align="center">Next-Generation Multi-Chain Forensic Intelligence, Cross-Border Evasion Countermeasures & Statutory Law Enforcement Automation Platform</h3>
 
 <div align="center">
@@ -11,8 +11,9 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase%20Pooler-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![Gemini 1.5](https://img.shields.io/badge/AI-Google%20Gemini%201.5%20Pro-8E75C2?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![MHA / I4C](https://img.shields.io/badge/Ministry%20of%20Home%20Affairs-I4C%20%2F%20NCRP-138808?style=for-the-badge)](https://i4c.mha.gov.in/)
+[![Presentation Deck](https://img.shields.io/badge/Presentation-SIH26183%20PPT%20Deck-D24726?style=for-the-badge&logo=microsoftpowerpoint&logoColor=white)](#-official-presentation-deck)
 
-[🎯 Problem Statement](#-smart-india-hackathon-sih-2026-sih26183) • [💡 Platform Architecture](#-system-architecture) • [✨ Complete Feature Matrix](#-core-features--innovations) • [⚖️ Indian Statutory Law Suite](#-statutory-legal-automation--admissibility) • [🚀 Quickstart](#-quickstart--installation) • [🧪 Testing](#-automated-testing--verification)
+[🎯 Problem Statement](#-smart-india-hackathon-sih-2026-sih26183) • [📊 Presentation Deck](#-official-presentation-deck) • [💡 Platform Architecture](#-system-architecture) • [✨ Complete Feature Matrix](#-core-features--innovations) • [⚖️ Indian Statutory Law Suite](#-statutory-legal-automation--admissibility) • [🚀 Quickstart](#-quickstart--installation) • [🧪 Testing](#-automated-testing--verification)
 
 </div>
 
@@ -37,6 +38,26 @@ Traditional manual law enforcement workflows collapse due to **5 systemic failur
 3. **Cross-Chain Bridge & Mixer Blindspots:** Hopping from Ethereum to Tron or dropping funds into privacy pools (e.g., Tornado Cash) breaks conventional single-chain tracing.
 4. **Inter-Agency Silos:** Investigating officers across different states (e.g., Delhi, Maharashtra, Kerala) duplicate investigations on the same scam syndicate without knowing they share common mule wallets.
 5. **Judicial Inadmissibility:** Unsubstantiated AI claims or unverified screenshots are rejected by courts. Evidence must strictly satisfy **Section 94 BNSS (2023)**, **Section 91 CrPC**, and **Section 65B of the Indian Evidence Act / Section 63 BSA**.
+
+---
+
+## 📊 Official Presentation Deck (SIH26183)
+
+<div align="center">
+
+[![View Presentation](https://img.shields.io/badge/Open%20Presentation-SIH26183%20Slide%20Deck-FF5722?style=for-the-badge&logo=google-slides&logoColor=white)](https://docs.google.com/presentation/d/YOUR_PRESENTATION_LINK/view)
+
+**[📽️ Click Here to Access Official Presentation Deck (PPT / Google Slides)](https://docs.google.com/presentation/d/YOUR_PRESENTATION_LINK/view)**
+
+*Team: ByteBuilders • Problem Statement: SIH26183 (Ministry of Home Affairs / I4C)*
+
+</div>
+
+> [!TIP]
+> **Slide Deck Highlights:**
+> - **The Problem:** Golden Hour failure, multi-hop peeling chains, mixer black holes, and inter-agency data silos.
+> - **Our Innovations:** Zero-mock 7+ chain indexing, adaptive AI voice copilot, anti-dust pruning, cross-case syndicate clustering, and Leaflet radar geo-mapping.
+> - **Legal Compliance Matrix:** Automated generation of Section 94 BNSS / Section 91 CrPC freezing notices and Section 65B Indian Evidence Act certificates.
 
 ---
 
