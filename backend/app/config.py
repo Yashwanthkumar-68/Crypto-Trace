@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     )
 
     # Blockchain RPCs
-    ETHEREUM_RPC_URL: str = "https://eth.llamarpc.com"
+    ETHEREUM_RPC_URL: str = "https://ethereum-rpc.publicnode.com"
     SEPOLIA_RPC_URL: str = "https://ethereum-sepolia-rpc.publicnode.com"
-    POLYGON_RPC_URL: str = "https://polygon-rpc.com"
+    POLYGON_RPC_URL: str = "https://polygon-bor-rpc.publicnode.com"
     BNB_RPC_URL: str = "https://bsc-dataseed.binance.org"
 
     # Supabase Configuration

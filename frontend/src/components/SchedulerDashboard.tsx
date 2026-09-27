@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Play, Pause, Trash2, History, RefreshCw, Timer } from 'lucide-react';
 import { api } from '../services/api';
+import { detectCurrencyType } from '../utils/currencyDetector';
 
 interface Job {
   id: string;
@@ -155,14 +156,37 @@ export const SchedulerDashboard: React.FC = () => {
           </h2>
           <form onSubmit={handleCreateJob} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Wallet Address</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">Wallet Address</label>
+                {(() => {
+                  const det = detectCurrencyType(walletAddress);
+                  return det && det.isValid ? (
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${det.badgeColor}`}>
+                      <span>{det.symbol}</span>
+                      <span className="opacity-75">• Auto</span>
+                    </span>
+                  ) : null;
+                })()}
+              </div>
               <input
                 type="text"
                 required
                 value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="Enter wallet address"
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setWalletAddress(val);
+                  const det = detectCurrencyType(val);
+                  if (det && det.isValid) {
+                    if (det.symbol === 'BTC') setBlockchain('Bitcoin');
+                    else if (det.symbol === 'SOL') setBlockchain('Solana');
+                    else if (det.symbol === 'TRX') setBlockchain('Tron');
+                    else if (det.symbol === 'ETH' && !['Ethereum', 'Binance Smart Chain'].includes(blockchain)) {
+                      setBlockchain('Ethereum');
+                    }
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
+                placeholder="Enter wallet address (0x..., bc1..., 1..., T..., or SOL)"
               />
             </div>
             <div>
@@ -183,10 +207,11 @@ export const SchedulerDashboard: React.FC = () => {
                 onChange={(e) => setBlockchain(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="Bitcoin">Bitcoin</option>
                 <option value="Ethereum">Ethereum</option>
-                <option value="Binance Smart Chain">Binance Smart Chain</option>
+                <option value="Bitcoin">Bitcoin</option>
+                <option value="Solana">Solana</option>
                 <option value="Tron">Tron</option>
+                <option value="Binance Smart Chain">Binance Smart Chain</option>
               </select>
             </div>
             <div>

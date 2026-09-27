@@ -21,7 +21,16 @@ class WalletService:
     @staticmethod
     def get_provider(blockchain: str):
         b = blockchain.lower()
-        if "polygon" in b:
+        if "bitcoin" in b or "btc" in b:
+            from app.blockchain.chain_registry import ChainRegistry
+            return ChainRegistry.get_adapter(0)
+        elif "solana" in b or "sol" in b:
+            from app.blockchain.chain_registry import ChainRegistry
+            return ChainRegistry.get_adapter(101)
+        elif "tron" in b or "trx" in b:
+            from app.blockchain.chain_registry import ChainRegistry
+            return ChainRegistry.get_adapter(728126428)
+        elif "polygon" in b:
             return PolygonProvider()
         elif "bnb" in b or "binance" in b:
             return BNBProvider()
@@ -44,37 +53,60 @@ class WalletService:
         if not is_valid:
             raise ValueError(f"Invalid {blockchain} address format: {address}")
 
-        norm_addr = address.strip().lower()
+        norm_addr = address.strip().lower() if getattr(provider, "is_evm", True) else address.strip()
 
         # 1. Fetch cached transactions from DB (case-insensitive)
         db_txs = db.query(Transaction).filter(
             or_(
-                func.lower(Transaction.from_address) == norm_addr,
-                func.lower(Transaction.to_address) == norm_addr
+                func.lower(Transaction.from_address) == norm_addr.lower(),
+                func.lower(Transaction.to_address) == norm_addr.lower()
             )
         ).all()
 
         # 2. If transactions in DB are low and not demo mode, attempt RPC / explorer retrieval
         if len(db_txs) < 2 and not settings.DEMO_MODE:
             try:
-                live_txs = provider.get_transactions_for_wallet(norm_addr, limit=25)
+                if hasattr(provider, "get_transactions_for_wallet"):
+                    live_txs = provider.get_transactions_for_wallet(norm_addr, limit=25)
+                elif hasattr(provider, "get_transactions"):
+                    raw_txs = provider.get_transactions(norm_addr, limit=25)
+                    live_txs = []
+                    for rtx in raw_txs:
+                        live_txs.append(
+                            type("MockNormalizedTx", (), {
+                                "transaction_hash": rtx.get("tx_hash"),
+                                "block_number": rtx.get("block_number"),
+                                "timestamp": datetime.datetime.utcnow(),
+                                "from_address": rtx.get("from_address"),
+                                "to_address": rtx.get("to_address"),
+                                "amount_native": rtx.get("value_native", 0.0),
+                                "amount_usd_if_available": None,
+                                "gas_used": None,
+                                "gas_fee": None,
+                                "status": rtx.get("status", "SUCCESS")
+                            })()
+                        )
+                else:
+                    live_txs = []
+
                 for ltx in live_txs:
                     existing_tx = db.query(Transaction).filter(
-                        Transaction.transaction_hash == ltx.transaction_hash
+                        Transaction.tx_hash == ltx.transaction_hash
                     ).first()
                     if not existing_tx:
                         new_tx = Transaction(
-                            transaction_hash=ltx.transaction_hash,
+                            tx_hash=ltx.transaction_hash,
                             blockchain=blockchain,
+                            chain_id=getattr(provider, "chain_id", 11155111),
                             block_number=ltx.block_number,
-                            timestamp=ltx.timestamp,
-                            from_address=(ltx.from_address or "").lower(),
-                            to_address=(ltx.to_address or "").lower(),
-                            amount_native=ltx.amount_native,
+                            block_timestamp=ltx.timestamp,
+                            from_address=(ltx.from_address or ""),
+                            to_address=(ltx.to_address or ""),
+                            value_eth=ltx.amount_native,
                             amount_usd_if_available=ltx.amount_usd_if_available,
                             gas_used=ltx.gas_used,
                             gas_fee=ltx.gas_fee,
-                            status=ltx.status,
+                            receipt_status=ltx.status,
                             case_id=case_id
                         )
                         db.add(new_tx)
@@ -82,12 +114,12 @@ class WalletService:
                 # Re-query
                 db_txs = db.query(Transaction).filter(
                     or_(
-                        func.lower(Transaction.from_address) == norm_addr,
-                        func.lower(Transaction.to_address) == norm_addr
+                        func.lower(Transaction.from_address) == norm_addr.lower(),
+                        func.lower(Transaction.to_address) == norm_addr.lower()
                     )
                 ).all()
             except Exception:
-                pass
+                db.rollback()
 
         # 3. Pull all relevant transactions for the case / connected hops
         all_case_txs = db.query(Transaction).all() if len(db_txs) < 10 else db_txs
@@ -125,13 +157,13 @@ class WalletService:
 
         # 10. Update or create Wallet model
         w_record = db.query(Wallet).filter(
-            func.lower(Wallet.address) == norm_addr,
+            func.lower(Wallet.address) == norm_addr.lower(),
             Wallet.blockchain == blockchain
         ).first()
 
-        lbl_entry = labels_map.get(norm_addr)
-        in_val = sum(t.amount_native for t in all_case_txs if (t.to_address or "").lower() == norm_addr)
-        out_val = sum(t.amount_native for t in all_case_txs if (t.from_address or "").lower() == norm_addr)
+        lbl_entry = labels_map.get(norm_addr.lower())
+        in_val = sum(t.amount_native for t in all_case_txs if (t.to_address or "").lower() == norm_addr.lower())
+        out_val = sum(t.amount_native for t in all_case_txs if (t.from_address or "").lower() == norm_addr.lower())
 
         if not w_record:
             w_record = Wallet(
@@ -143,7 +175,7 @@ class WalletService:
                 risk_level=risk_data["level"],
                 total_incoming=in_val,
                 total_outgoing=out_val,
-                tx_count=len([t for t in all_case_txs if (t.from_address or "").lower() == norm_addr or (t.to_address or "").lower() == norm_addr])
+                tx_count=len([t for t in all_case_txs if (t.from_address or "").lower() == norm_addr.lower() or (t.to_address or "").lower() == norm_addr.lower()])
             )
             db.add(w_record)
         else:
@@ -151,7 +183,7 @@ class WalletService:
             w_record.risk_level = risk_data["level"]
             w_record.total_incoming = in_val
             w_record.total_outgoing = out_val
-            w_record.tx_count = len([t for t in all_case_txs if (t.from_address or "").lower() == norm_addr or (t.to_address or "").lower() == norm_addr])
+            w_record.tx_count = len([t for t in all_case_txs if (t.from_address or "").lower() == norm_addr.lower() or (t.to_address or "").lower() == norm_addr.lower()])
 
         db.commit()
 

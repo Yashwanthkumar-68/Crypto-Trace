@@ -81,6 +81,14 @@ export interface GraphNode {
   tx_count: number;
   hops_from_source: number;
   is_source: boolean;
+  // Forensic Entity & Wallet Metrics
+  gas_funder?: string;
+  entity_label?: 'CEX' | 'DEX' | 'Mixer' | 'Darknet' | 'Phishing' | 'Unattributed' | string;
+  wallet_age_days?: number;
+  dormancy_index?: number;
+  co_spend_group_id?: string;
+  hop_distance?: number;
+  sanction_flag?: boolean;
 }
 
 export interface GraphEdge {
@@ -94,6 +102,64 @@ export interface GraphEdge {
   block_number?: number;
   blockchain: string;
   is_suspicious: boolean;
+  // Forensic Flow & Risk Metrics
+  tx_velocity_sec?: number;
+  peel_chain_ratio?: number;
+  risk_score?: number;
+}
+
+export interface DustMetrics {
+  anti_dust_active: boolean;
+  dust_threshold_pct: number;
+  pruned_tx_count: number;
+  pruned_volume_native: number;
+  trunk_edges_retained: number;
+  primary_trunk_volume: number;
+  noise_suppression_ratio: number;
+}
+
+export interface MixerCorrelatedExit {
+  exit_wallet: string;
+  withdrawal_tx: string;
+  withdrawn_amount: number;
+  estimated_relayer_fee: number;
+  fee_percentage: number;
+  time_delta_minutes: number;
+  confidence_score: number;
+  risk_tier: string;
+  justification: string;
+}
+
+export interface MixerDepositCorrelation {
+  mixer_name: string;
+  mixer_address: string;
+  deposit_tx: string;
+  deposit_wallet: string;
+  deposit_amount: number;
+  correlated_exit_candidates: MixerCorrelatedExit[];
+  candidates_count: number;
+  status: string;
+}
+
+export interface MixerCountermeasuresReport {
+  evasion_detected: boolean;
+  mixer_deposit_count: number;
+  total_mixed_volume: number;
+  correlations: MixerDepositCorrelation[];
+  engine_status: string;
+}
+
+export interface EvasionCountermeasuresResponse {
+  case_id: string;
+  suspect_wallet: string;
+  dust_countermeasures: DustMetrics;
+  mixer_countermeasures: MixerCountermeasuresReport;
+  cross_chain_countermeasures: {
+    bridge_hops_count: number;
+    detected_hops: any[];
+  };
+  engine_version: string;
+  status: string;
 }
 
 export interface SubgraphData {
@@ -103,7 +169,9 @@ export interface SubgraphData {
   source: string;
   node_count: number;
   edge_count: number;
+  dust_metrics?: DustMetrics;
 }
+
 
 export interface MoneyTrailStep {
   from_address: string;
@@ -580,6 +648,18 @@ export interface BlockchainNetworkInfo {
   block_explorer_url?: string | null;
 }
 
+export interface ChainHealthInfo {
+  chain_id: number;
+  name: string;
+  symbol: string;
+  is_evm: boolean;
+  status: 'ONLINE' | 'OFFLINE';
+  latest_block: number | null;
+  latency_ms: number;
+  rpc_url?: string;
+  explorer_url: string;
+}
+
 export interface MultichainWalletSummary {
   wallet_address: string;
   chains: Array<{
@@ -650,6 +730,64 @@ export interface AvailableInvestigator {
   specialization?: string;
   availability_status: string;
   active_cases_count: number;
+}
+
+export interface CollaborationOfficer {
+  id: number;
+  username: string;
+  full_name: string;
+  email?: string;
+  role: string;
+  organization: string;
+  department: string;
+  experience_years: number;
+  specialization: string;
+  badge_id: string;
+  availability_status: string;
+  active_cases_count: number;
+  is_current_user: boolean;
+  collaboration_status: 'NONE' | 'LEAD' | 'ACCEPTED' | 'PENDING' | 'REJECTED';
+  assignment_id?: number | null;
+  invitation_notes?: string | null;
+}
+
+export interface CaseCollaboratorItem {
+  assignment_id: number;
+  user_id: string;
+  numeric_id?: number;
+  username: string;
+  full_name: string;
+  role: string;
+  department?: string;
+  specialization?: string;
+  badge_id?: string;
+  status: 'ACCEPTED' | 'PENDING' | 'REJECTED';
+  is_lead?: boolean;
+  joined_at: string;
+  invited_by?: string;
+  invited_by_username?: string;
+  message?: string;
+  can_respond?: boolean;
+}
+
+export interface TeamNoteItem {
+  id: string;
+  case_id: string;
+  author: string;
+  author_username?: string;
+  content: string;
+  mentions?: string[];
+  thread_id?: string;
+  created_at: string;
+}
+
+export interface ActivityFeedItem {
+  id: string;
+  case_id: string;
+  actor: string;
+  action: string;
+  details?: string;
+  timestamp: string;
 }
 
 export interface InAppNotification {

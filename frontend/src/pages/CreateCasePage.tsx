@@ -3,6 +3,7 @@ import { ArrowLeft, PlusCircle, Shield, AlertCircle, Wallet, Hash, Layers, HelpC
 import { api } from '../services/api';
 import { User, CasePriority, AvailableInvestigator } from '../types';
 import { VoiceAssistant, ExtractedComplaintData } from '../components/VoiceAssistant';
+import { detectCurrencyType } from '../utils/currencyDetector';
 
 interface CreateCasePageProps {
   currentUser: User | null;
@@ -383,21 +384,44 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
             <p className="text-xs font-bold text-[#1E293B]">Cryptographic Identifiers</p>
 
-            {(evidenceType === 'wallet' || evidenceType === 'both') && (
-              <div>
-                <label className="text-slate-700 font-semibold block mb-1">
-                  Suspect Wallet Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required={evidenceType === 'wallet' || evidenceType === 'both'}
-                  value={suspectWallet}
-                  onChange={(e) => setSuspectWallet(e.target.value.trim())}
-                  placeholder="0x..."
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-red-600 font-mono focus:outline-none focus:border-red-500"
-                />
-              </div>
-            )}
+            {(evidenceType === 'wallet' || evidenceType === 'both') && (() => {
+              const detected = detectCurrencyType(suspectWallet);
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-700 font-semibold block text-xs">
+                      Suspect Wallet Address <span className="text-red-500">*</span>
+                    </label>
+                    {detected && detected.isValid && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${detected.badgeColor}`}>
+                        <span>{detected.name} ({detected.symbol})</span>
+                        <span className="text-[9px] uppercase tracking-wider opacity-75">• Auto-Detected</span>
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    required={evidenceType === 'wallet' || evidenceType === 'both'}
+                    value={suspectWallet}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setSuspectWallet(val);
+                      const det = detectCurrencyType(val);
+                      if (det && det.isValid) {
+                        if (det.symbol === 'BTC') setBlockchain('Bitcoin');
+                        else if (det.symbol === 'SOL') setBlockchain('Solana');
+                        else if (det.symbol === 'TRX') setBlockchain('Tron');
+                        else if (det.symbol === 'ETH' && !['Ethereum', 'Polygon', 'BNB Smart Chain'].includes(blockchain)) {
+                          setBlockchain('Ethereum');
+                        }
+                      }
+                    }}
+                    placeholder="e.g. 0x..., bc1..., 1..., 3..., T..., or Solana address"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              );
+            })()}
 
             {(evidenceType === 'tx_hash' || evidenceType === 'both') && (
               <div>
@@ -430,6 +454,9 @@ export const CreateCasePage: React.FC<CreateCasePageProps> = ({
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[#1E293B] focus:outline-none focus:border-[#2563EB]"
                 >
                   <option value="Ethereum">Ethereum (Sepolia / Mainnet)</option>
+                  <option value="Bitcoin">Bitcoin Mainnet (BTC)</option>
+                  <option value="Solana">Solana Mainnet (SOL)</option>
+                  <option value="Tron">Tron Mainnet (TRX / USDT TRC-20)</option>
                   <option value="Polygon">Polygon PoS</option>
                   <option value="BNB Smart Chain">BNB Smart Chain</option>
                 </select>

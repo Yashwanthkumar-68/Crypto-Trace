@@ -51,6 +51,9 @@ class ConnectionManager:
                 logger.warning(f"Failed to broadcast alert: {e}")
                 self.all_connections.discard(connection)
 
+    async def broadcast(self, message: dict):
+        await self.broadcast_alert(message)
+
 
 manager = ConnectionManager()
 

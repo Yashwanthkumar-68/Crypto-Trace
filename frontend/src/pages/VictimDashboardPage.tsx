@@ -67,26 +67,26 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
   return (
     <div className="space-y-6">
       {/* Hero Welcome Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#0F172A] p-6 sm:p-8 border border-slate-800 shadow-xl text-white">
+      <div className="relative overflow-hidden rounded-3xl bg-white p-6 sm:p-8 border border-slate-200/80 shadow-sm text-slate-900">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase tracking-wide">
+              <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wide">
                 {t('victim.portal_title', 'Citizen Victim Portal')}
               </span>
-              <span className="text-[11px] text-slate-400 font-mono">{t('victim.interop_badge', 'NCRP / I4C Interoperable')}</span>
+              <span className="text-[11px] text-slate-500 font-mono">{t('victim.interop_badge', 'NCRP / I4C Interoperable')}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {t('victim.welcome', 'Welcome')}, {currentUser.full_name || currentUser.username}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
               {t('victim.desc', 'Track real-time blockchain tracing progress, inspect exchange destination leads, and coordinate directly with your assigned Cybercrime Law Enforcement Officer.')}
             </p>
           </div>
 
           <button
             onClick={onCreateNewCase}
-            className="self-start md:self-center flex items-center gap-2 px-5 py-2.5 bg-[#2563EB] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-[0.98]"
+            className="self-start md:self-center flex items-center gap-2 px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             {t('nav.file_complaint', 'File New Complaint')}
@@ -94,26 +94,26 @@ export const VictimDashboardPage: React.FC<VictimDashboardPageProps> = ({
         </div>
 
         {/* Quick Stats in Hero */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-800">
-          <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60">
-            <p className="text-[11px] text-slate-400 font-medium">Total Complaints</p>
-            <p className="text-xl font-black text-white mt-0.5">{cases.length}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-100">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 hover:bg-white hover:shadow-xs transition-all">
+            <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Total Complaints</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{cases.length}</p>
           </div>
-          <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60">
-            <p className="text-[11px] text-slate-400 font-medium">Active Investigations</p>
-            <p className="text-xl font-black text-blue-400 mt-0.5">
+          <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 hover:bg-white hover:shadow-xs transition-all">
+            <p className="text-[11px] text-blue-600 font-semibold uppercase tracking-wider">Active Investigations</p>
+            <p className="text-2xl font-black text-blue-700 mt-1">
               {cases.filter(c => ['ASSIGNED', 'ACCEPTED', 'UNDER_INVESTIGATION'].includes(c.status)).length}
             </p>
           </div>
-          <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60">
-            <p className="text-[11px] text-slate-400 font-medium">Reported Loss</p>
-            <p className="text-xl font-black text-amber-400 mt-0.5">
+          <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 hover:bg-white hover:shadow-xs transition-all">
+            <p className="text-[11px] text-amber-700 font-semibold uppercase tracking-wider">Reported Loss</p>
+            <p className="text-2xl font-black text-amber-800 mt-1">
               ₹{totalLost.toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60">
-            <p className="text-[11px] text-slate-400 font-medium">Resolved Cases</p>
-            <p className="text-xl font-black text-emerald-400 mt-0.5">
+          <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 hover:bg-white hover:shadow-xs transition-all">
+            <p className="text-[11px] text-emerald-700 font-semibold uppercase tracking-wider">Resolved Cases</p>
+            <p className="text-2xl font-black text-emerald-800 mt-1">
               {cases.filter(c => c.status === 'RESOLVED').length}
             </p>
           </div>

@@ -6,6 +6,7 @@ import {
 import { api } from '../services/api';
 import {
   BlockchainNetworkInfo,
+  ChainHealthInfo,
   MultichainWalletSummary,
   CrossChainLinkItem,
   RecordCrossChainLinkPayload,
@@ -23,6 +24,7 @@ export const MultiChainExplorer: React.FC<MultiChainExplorerProps> = ({
   onInspectWallet
 }) => {
   const [chains, setChains] = useState<BlockchainNetworkInfo[]>([]);
+  const [healthMap, setHealthMap] = useState<Record<number, ChainHealthInfo>>({});
   const [bridges, setBridges] = useState<any[]>([]);
   const [links, setLinks] = useState<CrossChainLinkItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,14 +48,22 @@ export const MultiChainExplorer: React.FC<MultiChainExplorerProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ch, br, lk] = await Promise.all([
+      const [ch, br, lk, healthList] = await Promise.all([
         api.getChains(),
         api.getCrossChainBridges(),
-        api.getCrossChainLinks()
+        api.getCrossChainLinks(),
+        api.getChainsHealth().catch(() => [])
       ]);
       setChains(ch);
       setBridges(br);
       setLinks(lk);
+      const hMap: Record<number, ChainHealthInfo> = {};
+      if (Array.isArray(healthList)) {
+        healthList.forEach((h: ChainHealthInfo) => {
+          hMap[h.chain_id] = h;
+        });
+      }
+      setHealthMap(hMap);
     } catch (err) {
       console.error('Failed to load multi-chain data', err);
     } finally {
@@ -150,46 +160,66 @@ export const MultiChainExplorer: React.FC<MultiChainExplorerProps> = ({
 
         {/* Registered Blockchain Networks Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-800">
-          {chains.map((chain) => (
-            <div
-              key={chain.chain_id}
-              className={`p-4 rounded-xl border transition-all ${
-                chain.rpc_configured
-                  ? 'bg-slate-900/90 border-blue-500/50 shadow-sm'
-                  : 'bg-slate-900/50 border-slate-700/60'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="font-bold text-xs text-white tracking-wide">
-                  {chain.network_name}
-                </span>
-                <span
-                  className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold border ${
-                    chain.rpc_configured
-                      ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  {chain.rpc_configured ? 'RPC ACTIVE' : 'REGISTERED'}
-                </span>
-              </div>
+          {chains.map((chain) => {
+            const health = healthMap[chain.chain_id];
+            const isOnline = health?.status === 'ONLINE' || chain.rpc_configured;
+            const chainName = chain.network_name || (chain as any).name;
+            const currency = chain.native_currency || (chain as any).symbol;
 
-              <div className="space-y-1 text-[11px] text-slate-400 font-mono">
-                <div className="flex justify-between">
-                  <span>Chain ID:</span>
-                  <span className="text-slate-200 font-semibold">{chain.chain_id}</span>
+            return (
+              <div
+                key={chain.chain_id}
+                className={`p-4 rounded-xl border transition-all ${
+                  isOnline
+                    ? 'bg-slate-900/90 border-blue-500/50 shadow-sm'
+                    : 'bg-slate-900/50 border-slate-700/60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="font-bold text-xs text-white tracking-wide truncate">
+                    {chainName}
+                  </span>
+                  <span
+                    className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold border flex items-center gap-1 ${
+                      isOnline
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                    {health?.status === 'ONLINE' ? 'LIVE ONLINE' : isOnline ? 'RPC ACTIVE' : 'REGISTERED'}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Currency:</span>
-                  <span className="text-slate-200 font-semibold">{chain.native_currency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Type:</span>
-                  <span className="text-slate-200 font-semibold">{chain.is_evm ? 'EVM Compatible' : 'Non-EVM'}</span>
+
+                <div className="space-y-1 text-[11px] text-slate-400 font-mono">
+                  <div className="flex justify-between">
+                    <span>Chain ID:</span>
+                    <span className="text-slate-200 font-semibold">{chain.chain_id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Currency:</span>
+                    <span className="text-slate-200 font-semibold">{currency}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Type:</span>
+                    <span className="text-slate-200 font-semibold">{chain.is_evm ? 'EVM Web3' : 'Non-EVM Node'}</span>
+                  </div>
+                  {health?.latest_block && (
+                    <div className="flex justify-between text-blue-400 pt-0.5 border-t border-slate-800/80">
+                      <span>Latest Block:</span>
+                      <span className="font-bold">#{health.latest_block.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {health?.latency_ms !== undefined && (
+                    <div className="flex justify-between text-slate-500 text-[10px]">
+                      <span>Node Latency:</span>
+                      <span>{health.latency_ms} ms</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -207,7 +237,7 @@ export const MultiChainExplorer: React.FC<MultiChainExplorerProps> = ({
           <input
             type="text"
             required
-            placeholder="Enter EVM wallet address (0x...)"
+            placeholder="Enter address (0x... EVM, bc1... Bitcoin, Solana Base58, Tron T...)"
             value={walletLookup}
             onChange={(e) => setWalletLookup(e.target.value)}
             className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-[#1E293B] font-mono placeholder-slate-400 focus:outline-none focus:border-[#2563EB]"

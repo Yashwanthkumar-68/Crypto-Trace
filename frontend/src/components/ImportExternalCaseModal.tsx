@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Building2, User, Phone, Mail, FileText, DollarSign, Wallet, Calendar, AlertTriangle, ShieldCheck, CheckCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { Case } from '../types';
+import { detectCurrencyType } from '../utils/currencyDetector';
 
 interface ImportExternalCaseModalProps {
   isOpen: boolean;
@@ -237,14 +238,38 @@ export const ImportExternalCaseModal: React.FC<ImportExternalCaseModalProps> = (
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Suspect Wallet Address
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Suspect Wallet Address
+                  </label>
+                  {(() => {
+                    const det = detectCurrencyType(formData.suspect_wallet);
+                    return det && det.isValid ? (
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${det.badgeColor}`}>
+                        <span>{det.symbol}</span>
+                        <span className="opacity-75">• Auto</span>
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
                 <input
                   type="text"
-                  placeholder="0x... or bc1..."
+                  placeholder="0x..., bc1..., 1..., 3..., T..., or Solana address"
                   value={formData.suspect_wallet}
-                  onChange={(e) => setFormData({ ...formData, suspect_wallet: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    const det = detectCurrencyType(val);
+                    let newChain = formData.blockchain;
+                    if (det && det.isValid) {
+                      if (det.symbol === 'BTC') newChain = 'Bitcoin';
+                      else if (det.symbol === 'SOL') newChain = 'Solana';
+                      else if (det.symbol === 'TRX') newChain = 'Tron';
+                      else if (det.symbol === 'ETH' && !['Ethereum', 'Ethereum Sepolia', 'Polygon PoS', 'BNB Smart Chain'].includes(formData.blockchain)) {
+                        newChain = 'Ethereum';
+                      }
+                    }
+                    setFormData({ ...formData, suspect_wallet: val, blockchain: newChain });
+                  }}
                   className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
@@ -260,10 +285,11 @@ export const ImportExternalCaseModal: React.FC<ImportExternalCaseModalProps> = (
                 >
                   <option value="Ethereum">Ethereum (Mainnet)</option>
                   <option value="Ethereum Sepolia">Ethereum Sepolia (Testnet)</option>
+                  <option value="Bitcoin">Bitcoin (BTC)</option>
+                  <option value="Solana">Solana (SOL)</option>
+                  <option value="Tron">Tron (TRX / USDT TRC-20)</option>
                   <option value="Polygon PoS">Polygon PoS</option>
                   <option value="BNB Smart Chain">BNB Smart Chain</option>
-                  <option value="Bitcoin">Bitcoin</option>
-                  <option value="Solana">Solana</option>
                 </select>
               </div>
 

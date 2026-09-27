@@ -47,7 +47,7 @@ class EVMAdapter(BlockchainAdapter):
     @property
     def w3(self):
         if self._w3 is None:
-            self._w3 = Web3(Web3.HTTPProvider(self.rpc_url))
+            self._w3 = Web3(Web3.HTTPProvider(self.rpc_url, request_kwargs={"timeout": 5}))
         return self._w3
 
     def validate_address(self, address: str) -> bool:

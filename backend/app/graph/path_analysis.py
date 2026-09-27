@@ -23,10 +23,13 @@ class PathAnalyzer:
         source: str,
         max_hops: int = 2,
         suspicious_only: bool = False,
-        suspicious_tx_hashes: Optional[Set[str]] = None
+        suspicious_tx_hashes: Optional[Set[str]] = None,
+        anti_dust: bool = True,
+        dust_threshold: float = 0.02
     ) -> Dict[str, Any]:
         """
         Extracts k-hop neighborhood from source address formatted for frontend graph rendering.
+        Applies mathematical Anti-Dusting pruning to eliminate adversarial noise micro-transactions.
         """
         matched = self._find_node(source)
         if not matched:
@@ -36,7 +39,16 @@ class PathAnalyzer:
                 "max_hops": max_hops,
                 "source": source,
                 "node_count": 0,
-                "edge_count": 0
+                "edge_count": 0,
+                "dust_metrics": {
+                    "anti_dust_active": anti_dust,
+                    "dust_threshold_pct": round(dust_threshold * 100, 1),
+                    "pruned_tx_count": 0,
+                    "pruned_volume_native": 0.0,
+                    "trunk_edges_retained": 0,
+                    "primary_trunk_volume": 0.0,
+                    "noise_suppression_ratio": 0.0
+                }
             }
         source = matched
 
@@ -64,9 +76,64 @@ class PathAnalyzer:
                         node_hops[pred] = 1
                         visited_nodes.add(pred)
 
+        # Precalculate parent node outflows for relative thresholding
+        node_outflows: Dict[str, float] = {}
+        for n in visited_nodes:
+            out_edges = self.g.out_edges(n, data=True)
+            node_outflows[n] = sum(d.get("amount", 0.0) for _, _, d in out_edges)
+
+        # Extract edges between visited nodes with Anti-Dust Pruning
+        edges_data = []
+        pruned_dust_count = 0
+        pruned_dust_volume = 0.0
+
+        for u, v, key, data in self.g.edges(keys=True, data=True):
+            if u in visited_nodes and v in visited_nodes:
+                tx_hash = data.get("transaction_hash", key)
+                is_suspicious = (
+                    suspicious_tx_hashes and tx_hash in suspicious_tx_hashes
+                ) or data.get("is_suspicious", False)
+
+                if suspicious_only and not is_suspicious:
+                    continue
+
+                edge_val = data.get("amount", 0.0)
+                parent_outflow = node_outflows.get(u, 0.0)
+
+                # EVASION COUNTERMEASURE: Anti-Dusting Pruning Engine
+                # If transaction branch carries < 2% of node outflow, classify as noise/dusting attack
+                if anti_dust and dust_threshold > 0 and parent_outflow > 0:
+                    if (edge_val / parent_outflow) < dust_threshold:
+                        pruned_dust_count += 1
+                        pruned_dust_volume += edge_val
+                        continue  # Prune dust transaction from graph
+
+                edges_data.append({
+                    "id": f"{u}->{v}:{tx_hash}",
+                    "source": u,
+                    "target": v,
+                    "transaction_hash": tx_hash,
+                    "amount": round(edge_val, 4),
+                    "amount_usd": data.get("amount_usd"),
+                    "timestamp": data.get("timestamp"),
+                    "block_number": data.get("block_number"),
+                    "blockchain": data.get("blockchain", "Ethereum"),
+                    "is_suspicious": is_suspicious
+                })
+
+        # Keep only nodes that have remaining valid edges or are the primary source
+        active_node_ids = {source}
+        for e in edges_data:
+            active_node_ids.add(e["source"])
+            active_node_ids.add(e["target"])
+
         # Extract nodes
         nodes_data = []
         for node in visited_nodes:
+            if anti_dust and node not in active_node_ids:
+                # Discard orphan nodes created by dust pruning
+                continue
+
             meta = self.g.nodes[node]
             nodes_data.append({
                 "id": node,
@@ -81,30 +148,9 @@ class PathAnalyzer:
                 "is_source": (node.lower() == source.lower())
             })
 
-        # Extract edges between visited nodes
-        edges_data = []
-        for u, v, key, data in self.g.edges(keys=True, data=True):
-            if u in visited_nodes and v in visited_nodes:
-                tx_hash = data.get("transaction_hash", key)
-                is_suspicious = (
-                    suspicious_tx_hashes and tx_hash in suspicious_tx_hashes
-                ) or data.get("is_suspicious", False)
-
-                if suspicious_only and not is_suspicious:
-                    continue
-
-                edges_data.append({
-                    "id": f"{u}->{v}:{tx_hash}",
-                    "source": u,
-                    "target": v,
-                    "transaction_hash": tx_hash,
-                    "amount": round(data.get("amount", 0.0), 4),
-                    "amount_usd": data.get("amount_usd"),
-                    "timestamp": data.get("timestamp"),
-                    "block_number": data.get("block_number"),
-                    "blockchain": data.get("blockchain", "Ethereum"),
-                    "is_suspicious": is_suspicious
-                })
+        primary_trunk_volume = sum(e["amount"] for e in edges_data)
+        total_txs = pruned_dust_count + len(edges_data)
+        noise_suppression_ratio = (pruned_dust_count / max(1, total_txs)) * 100.0
 
         return {
             "nodes": nodes_data,
@@ -112,8 +158,18 @@ class PathAnalyzer:
             "max_hops": max_hops,
             "source": source,
             "node_count": len(nodes_data),
-            "edge_count": len(edges_data)
+            "edge_count": len(edges_data),
+            "dust_metrics": {
+                "anti_dust_active": anti_dust,
+                "dust_threshold_pct": round(dust_threshold * 100, 1),
+                "pruned_tx_count": pruned_dust_count,
+                "pruned_volume_native": round(pruned_dust_volume, 6),
+                "trunk_edges_retained": len(edges_data),
+                "primary_trunk_volume": round(primary_trunk_volume, 4),
+                "noise_suppression_ratio": round(noise_suppression_ratio, 1)
+            }
         }
+
 
     def trace_paths_to_vasp(self, source: str, max_hops: int = 5) -> List[Dict[str, Any]]:
         """

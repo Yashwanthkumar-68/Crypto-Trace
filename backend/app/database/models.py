@@ -240,6 +240,14 @@ class Transaction(Base):
         self.value_eth = value
 
     @property
+    def value(self):
+        return self.value_eth
+
+    @value.setter
+    def value(self, val):
+        self.value_eth = val
+
+    @property
     def timestamp(self):
         return self.block_timestamp
 
@@ -421,6 +429,17 @@ class Monitoring(Base):
     case = relationship("Case", back_populates="monitored_wallets")
     alerts = relationship("Alert", back_populates="monitoring", cascade="all, delete-orphan")
 
+    @property
+    def address(self):
+        return self.wallet_address
+
+    @address.setter
+    def address(self, val):
+        self.wallet_address = val
+
+# Compatibility Alias
+MonitoredWallet = Monitoring
+
 
 class Alert(Base):
     __tablename__ = "alerts"
@@ -435,6 +454,38 @@ class Alert(Base):
     is_read = Column(Boolean, default=False)
 
     monitoring = relationship("Monitoring", back_populates="alerts")
+
+    @property
+    def severity(self):
+        return self.risk_level
+
+    @severity.setter
+    def severity(self, val):
+        self.risk_level = val
+
+    @property
+    def message(self):
+        return self.reason
+
+    @message.setter
+    def message(self, val):
+        self.reason = val
+
+    @property
+    def title(self):
+        return f"Real-Time Alert: {self.risk_level}"
+
+    @property
+    def created_at(self):
+        return self.timestamp
+
+    @created_at.setter
+    def created_at(self, val):
+        self.timestamp = val
+
+    @property
+    def case_id(self):
+        return self.monitoring.case_id if self.monitoring else None
 
 
 class Report(Base):

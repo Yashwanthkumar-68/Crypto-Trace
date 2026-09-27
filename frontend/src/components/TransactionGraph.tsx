@@ -422,6 +422,27 @@ export const TransactionGraph: React.FC<TransactionGraphProps> = ({
                   Primary Intake Target (Suspect Origin)
                 </div>
               )}
+
+              {/* Additive Forensic Metrics */}
+              {(hoveredNode.sanction_flag || hoveredNode.entity_label || hoveredNode.gas_funder) && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800">
+                  {hoveredNode.sanction_flag && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-950 text-red-400 border border-red-800">
+                      OFAC SANCTIONED
+                    </span>
+                  )}
+                  {hoveredNode.entity_label && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950 text-purple-300 border border-purple-800">
+                      {hoveredNode.entity_label}
+                    </span>
+                  )}
+                  {hoveredNode.gas_funder && (
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      Gas: {hoveredNode.gas_funder.slice(0, 6)}...
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -559,6 +580,22 @@ export const TransactionGraph: React.FC<TransactionGraphProps> = ({
                 {getWalletBalance(selectedNode).netEth.toFixed(3)} ETH <span className="text-[10px] text-slate-500 font-normal">(₹{Math.round(getWalletBalance(selectedNode).inr).toLocaleString('en-IN')})</span>
               </p>
             </div>
+            {selectedNode.sanction_flag && (
+              <div className="bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg">
+                <p className="text-[10px] text-red-600 font-sans uppercase font-bold flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3 text-red-600" /> Sanction
+                </p>
+                <p className="font-bold text-red-700 font-sans text-xs">OFAC Matched</p>
+              </div>
+            )}
+            {selectedNode.gas_funder && (
+              <div className="bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                <p className="text-[10px] text-slate-500 font-sans uppercase">Gas Funder</p>
+                <p className="font-mono text-slate-800 text-xs truncate max-w-[120px]" title={selectedNode.gas_funder}>
+                  {selectedNode.gas_funder.slice(0, 6)}...{selectedNode.gas_funder.slice(-4)}
+                </p>
+              </div>
+            )}
             {onInspectWallet && (
               <button
                 onClick={() => onInspectWallet(selectedNode.address)}

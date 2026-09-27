@@ -42,14 +42,17 @@ from app.api.sms_api import router as sms_router
 from app.api.cross_case_api import router as cross_case_router
 from app.api.wallet_verify_api import router as wallet_verify_router
 from app.api.ai_agent_api import router as ai_agent_router
+from app.api.ncrp_webhook import router as ncrp_webhook_router
 from app.blockchain.chain_registry import ChainRegistry
 from app.entities.service import EntityService
+from app.services.scheduler_daemon import scheduler
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("sih26183.main")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,7 +74,13 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Start the real-time background daemon
+    await scheduler.start()
+
     yield
+
+    # Stop the daemon on shutdown
+    await scheduler.stop()
     logger.info("Shutting down SIH26183 application...")
 
 app = FastAPI(
@@ -148,6 +157,7 @@ app.include_router(cross_case_router)
 app.include_router(wallet_verify_router, prefix="/api")
 app.include_router(wallet_verify_router)
 app.include_router(ai_agent_router, prefix="/api")
+app.include_router(ncrp_webhook_router, prefix="/api")
 
 @app.get("/", tags=["System"])
 def root_index():

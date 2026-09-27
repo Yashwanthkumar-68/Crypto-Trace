@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { WalletVerificationResponse } from '../types';
+import { detectCurrencyType } from '../utils/currencyDetector';
 
 interface WalletVerificationWidgetProps {
   onFileComplaint?: (walletAddress: string) => void;
@@ -114,13 +115,34 @@ export const WalletVerificationWidget: React.FC<WalletVerificationWidgetProps> =
                 type="text"
                 value={address}
                 onChange={(e) => {
-                  setAddress(e.target.value);
+                  const val = e.target.value.trim();
+                  setAddress(val);
                   setError(null);
+                  const det = detectCurrencyType(val);
+                  if (det && det.isValid) {
+                    if (det.symbol === 'BTC') setBlockchain('Bitcoin');
+                    else if (det.symbol === 'SOL') setBlockchain('Solana');
+                    else if (det.symbol === 'TRX') setBlockchain('Tron');
+                    else if (det.symbol === 'ETH' && !['Ethereum', 'Polygon', 'BSC'].includes(blockchain)) {
+                      setBlockchain('Ethereum');
+                    }
+                  }
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-                placeholder="Paste recipient wallet address (e.g. 0x742d35... or bc1q...)"
-                className="w-full pl-10 pr-4 py-2.5 text-xs font-mono bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-slate-900"
+                placeholder="Paste recipient wallet address (e.g. 0x..., bc1..., T..., or Solana address)"
+                className="w-full pl-10 pr-24 py-2.5 text-xs font-mono bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-slate-900"
               />
+              {(() => {
+                const det = detectCurrencyType(address);
+                return det && det.isValid ? (
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${det.badgeColor}`}>
+                      <span>{det.symbol}</span>
+                      <span className="opacity-70 text-[9px] uppercase tracking-wider">Auto</span>
+                    </span>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             <button

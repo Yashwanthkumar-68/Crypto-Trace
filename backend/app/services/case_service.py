@@ -248,9 +248,16 @@ class CaseService:
             ).order_by(Case.created_at.desc()).all()
 
         if user.role == UserRole.INVESTIGATOR:
+            collab_case_ids = [
+                row[0] for row in db.query(CaseAssignment.case_id).filter(
+                    CaseAssignment.investigator_id == user.id,
+                    CaseAssignment.status == CaseAssignmentStatus.ACCEPTED
+                ).all()
+            ]
             return db.query(Case).filter(
                 or_(
                     Case.assigned_investigator_id == user.id,
+                    Case.case_id.in_(collab_case_ids),
                     Case.status.in_([CaseStatus.NEW, CaseStatus.ASSIGNED])
                 )
             ).order_by(Case.created_at.desc()).all()

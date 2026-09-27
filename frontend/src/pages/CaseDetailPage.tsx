@@ -4,7 +4,7 @@ import {
   Network, GitCommit, AlertTriangle, Eye, FileText, History,
   Plus, ExternalLink, RefreshCw, Send, CheckCircle2, Building2,
   Link2, Users, AlertOctagon, TrendingUp, Layers, ChevronRight, Fingerprint,
-  Scale, FileCheck2
+  Scale, FileCheck2, ChevronDown, Activity, AlertCircle
 } from 'lucide-react';
 import {
   Case, Transaction, SubgraphData, MoneyTrailPath,
@@ -25,6 +25,8 @@ import { UnifiedTimeline } from '../components/UnifiedTimeline';
 import { GeoMap } from '../components/GeoMap';
 import { CollaborationPanel } from '../components/CollaborationPanel';
 import { CaseJourneyMap } from '../components/CaseJourneyMap';
+import { RequireRole } from '../components/auth/RequireRole';
+import { AdvancedForensicsPanel } from '../components/forensics/AdvancedForensicsPanel';
 
 interface CaseDetailPageProps {
   caseId: string;
@@ -87,6 +89,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({
   const [syndicateIntel, setSyndicateIntel] = useState<CaseSyndicateIntelResponse | null>(null);
   const [scanningLinks, setScanningLinks] = useState(false);
   const [graphViewMode, setGraphViewMode] = useState<'force' | 'hierarchical'>('force');
+  const [showLegalActionsMenu, setShowLegalActionsMenu] = useState(false);
 
   const loadCaseFull = async () => {
     setLoading(true);
@@ -309,6 +312,12 @@ Specialized Law Enforcement Forensic Unit
     loadCaseFull();
   }, [caseId, selectedHops, suspiciousOnly]);
 
+  useEffect(() => {
+    if (currentUser?.role === 'VICTIM' && !['overview', 'timeline', 'evidence'].includes(activeTab)) {
+      setActiveTab('overview');
+    }
+  }, [currentUser, activeTab]);
+
   const handleHopChange = (h: number) => {
     setSelectedHops(h);
   };
@@ -364,112 +373,149 @@ Specialized Law Enforcement Forensic Unit
   return (
     <div className="space-y-6">
       {/* Top Header & Breadcrumbs */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-start gap-4">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-colors"
+            className="mt-1 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors"
             title="Return to cases"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-[#1E293B] tracking-wide">
-                {caseData.title || caseData.complaint_reference}
-              </h2>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               {caseData.origin === 'EXTERNAL_IMPORT' ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1 uppercase tracking-wider">
                   <Building2 className="w-3 h-3 text-purple-600" />
-                  <span>Physical FIR ({caseData.external_reference || 'External'})</span>
+                  FIR ({caseData.external_reference || 'External'})
                 </span>
               ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
                   App Filing
                 </span>
               )}
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
-                {caseData.blockchain}
-              </span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                 caseData.priority === 'CRITICAL'
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : 'bg-blue-50 text-blue-700 border border-blue-200'
               }`}>
-                {caseData.priority}
+                {caseData.priority} PRIORITY
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-mono">
-                {caseData.status}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-600 uppercase tracking-wider">
+                {caseData.status.replace(/_/g, ' ')}
               </span>
-              {allowedTransitions.length > 0 && (
-                <button
-                  onClick={() => setShowStatusModal(true)}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-colors flex items-center gap-1"
-                >
-                  <GitCommit className="w-3 h-3 text-purple-600" />
-                  Transition Status
-                </button>
-              )}
+              <RequireRole allowedRoles={['INVESTIGATOR', 'SUPERVISOR', 'ADMINISTRATOR']} currentUser={currentUser}>
+                {allowedTransitions.length > 0 && (
+                  <button
+                    onClick={() => setShowStatusModal(true)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 shadow-sm transition-colors flex items-center gap-1 uppercase tracking-wider"
+                  >
+                    <GitCommit className="w-3 h-3 text-slate-400" />
+                    Change Status
+                  </button>
+                )}
+              </RequireRole>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-mono mt-0.5">
-              <span>Ref: <span className="text-slate-700 font-semibold">{caseData.complaint_reference}</span></span>
-              <span>• Suspect Wallet: <span className="text-red-600 font-semibold">{caseData.suspect_wallet}</span></span>
-              {caseData.suspect_wallet && (
-                <button
-                  onClick={() => handleDownloadSubpoena(caseData.suspect_wallet)}
-                  disabled={generatingSubpoena}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold border border-purple-300 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
-                  title="Generate Section 94 BNSS Statutory Notice ordering Exchange to freeze wallet and furnish KYC"
-                >
-                  <Scale className="w-3 h-3 text-purple-700" />
-                  <span>{generatingSubpoena ? 'Generating...' : '⚖️ Generate KYC Subpoena'}</span>
-                </button>
-              )}
+            
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              {caseData.title || caseData.complaint_reference}
+            </h2>
+            
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-mono mt-2">
+              <span className="bg-slate-50 px-2 py-1 rounded border border-slate-100">Ref: <span className="text-slate-900 font-semibold">{caseData.complaint_reference}</span></span>
+              <span className="bg-slate-50 px-2 py-1 rounded border border-slate-100">Suspect: <span className="text-red-600 font-semibold">{caseData.suspect_wallet || 'Pending'}</span></span>
+              <span className="bg-slate-50 px-2 py-1 rounded border border-slate-100">Network: <span className="text-slate-900 font-semibold">{caseData.blockchain}</span></span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {caseData.suspect_wallet && (
+        <RequireRole allowedRoles={['INVESTIGATOR', 'SUPERVISOR', 'ADMINISTRATOR']} currentUser={currentUser}>
+          <div className="relative flex items-center gap-2">
             <button
-              onClick={() => handleDownloadSubpoena(caseData.suspect_wallet)}
-              disabled={generatingSubpoena}
-              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-              title="1-Click Download of Statutory Notice under Section 94 BNSS, 2023 / Section 91 CrPC"
+              onClick={() => setShowLegalActionsMenu(!showLegalActionsMenu)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="Statutory directives, subpoenas, and forensic report generators"
             >
-              <Scale className="w-4 h-4 text-purple-200" />
-              <span>{generatingSubpoena ? 'Generating Notice...' : '⚖️ Section 94 Subpoena'}</span>
+              <Scale className="w-4 h-4 text-indigo-200" />
+              <span>Legal Actions</span>
+              <ChevronDown className="w-3.5 h-3.5 text-indigo-200" />
             </button>
-          )}
 
-          <button
-            onClick={() => setShowSection91Modal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-            title="Generate and download Section 91 CrPC Freeze Notice for identified exchange"
-          >
-            <Shield className="w-4 h-4 text-red-600" />
-            <span>Section 91 Notice</span>
-          </button>
+            {showLegalActionsMenu && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95">
+                <div className="px-3 py-1.5 border-b border-slate-100">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Statutory Directives</p>
+                </div>
 
-          <button
-            onClick={handleExportNcrp}
-            disabled={exportingNcrp}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer"
-            title="Download official NCRP standardized cybercrime dossier JSON"
-          >
-            <Database className="w-4 h-4 text-emerald-600" />
-            <span>{exportingNcrp ? 'Exporting...' : 'NCRP / SAHYOG'}</span>
-          </button>
+                {caseData.suspect_wallet && (
+                  <button
+                    onClick={() => {
+                      setShowLegalActionsMenu(false);
+                      handleDownloadSubpoena(caseData.suspect_wallet!);
+                    }}
+                    disabled={generatingSubpoena}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 hover:text-indigo-600 transition-colors"
+                  >
+                    <Scale className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                    <div>
+                      <div className="font-semibold">{generatingSubpoena ? 'Generating...' : 'Section 94 BNSS Subpoena'}</div>
+                      <div className="text-[10px] text-slate-400">KYC & account freeze notice</div>
+                    </div>
+                  </button>
+                )}
 
-          <button
-            onClick={handleGenerateReport}
-            disabled={generatingReport}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-            <span>{generatingReport ? 'Compiling Dossier...' : 'Generate Forensic Report'}</span>
-          </button>
-        </div>
+                <button
+                  onClick={() => {
+                    setShowLegalActionsMenu(false);
+                    setShowSection91Modal(true);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 hover:text-red-600 transition-colors"
+                >
+                  <Shield className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <div>
+                    <div className="font-semibold">Section 91 CrPC Notice</div>
+                    <div className="text-[10px] text-slate-400">Official VASP asset freezing directive</div>
+                  </div>
+                </button>
+
+                <div className="my-1 border-t border-slate-100" />
+                <div className="px-3 py-1 border-b border-slate-100">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Export Dossier</p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowLegalActionsMenu(false);
+                    handleExportNcrp();
+                  }}
+                  disabled={exportingNcrp}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 hover:text-emerald-600 transition-colors"
+                >
+                  <Database className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <div className="font-semibold">{exportingNcrp ? 'Exporting...' : 'NCRP / SAHYOG Portal JSON'}</div>
+                    <div className="text-[10px] text-slate-400">Standardized cybercrime dossier</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowLegalActionsMenu(false);
+                    handleGenerateReport();
+                  }}
+                  disabled={generatingReport}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 hover:text-blue-600 transition-colors"
+                >
+                  <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <div>
+                    <div className="font-semibold">{generatingReport ? 'Compiling Dossier...' : 'Generate Forensic Report'}</div>
+                    <div className="text-[10px] text-slate-400">Multi-page court-ready PDF</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+        </RequireRole>
       </div>
 
       {/* AI-Agent Driven Forensic Journey Map */}
@@ -516,43 +562,316 @@ Specialized Law Enforcement Forensic Unit
         </div>
       )}
 
-      {/* Tabs Navigation */}
-      <div className="border-b border-slate-200 flex items-center gap-1 overflow-x-auto pb-1">
-        {[
-          { id: 'overview', label: 'Overview' },
-          {
-            id: 'syndicate',
-            label: syndicateIntel?.is_part_of_syndicate
-              ? `🔗 Crime Ring (${syndicateIntel.total_linked_cases})`
-              : 'Syndicate Links'
-          },
-          { id: 'visual', label: '🕸️ Visual Analysis' },
-          { id: 'timeline', label: '⏱️ Campaign Timeline' },
-          { id: 'graph', label: 'Transaction Graph' },
-          { id: 'trail', label: 'Money Trail' },
-          { id: 'risk', label: 'Risk Analysis' },
-          { id: 'patterns', label: 'Suspicious Patterns' },
-          { id: 'evidence', label: 'Evidence Locker' },
-          { id: 'copilot', label: 'Investigation Copilot' },
-          { id: 'monitoring', label: 'Watchlist & Alerts' },
-          { id: 'reports', label: `Reports (${reportsList.length})` },
-          { id: 'audit', label: 'Audit Trail' },
-          { id: 'geo', label: 'Geo Intelligence' },
-          { id: 'collaboration', label: 'Team Collaboration' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as TabType)}
-            className={`px-3 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all ${
-              activeTab === tab.id
-                ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Figma-Style Workspace Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Column: Figma-Style Sticky Vertical Workspace Sidebar (3 cols) */}
+        <div className="md:col-span-4 lg:col-span-3 space-y-4 sticky top-20">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs space-y-4">
+            {currentUser?.role === 'VICTIM' ? (
+              <div className="space-y-1">
+                <div className="px-3 py-1 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Citizen Portal
+                  </span>
+                  <span className="text-[9px] font-mono font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                    VICTIM
+                  </span>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('overview')}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'overview'
+                      ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText className={`w-4 h-4 ${activeTab === 'overview' ? 'text-white' : 'text-slate-400'}`} />
+                    <span>Case Overview</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('timeline')}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'timeline'
+                      ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Clock className={`w-4 h-4 ${activeTab === 'timeline' ? 'text-white' : 'text-slate-400'}`} />
+                    <span>Timeline</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('evidence')}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'evidence'
+                      ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Database className={`w-4 h-4 ${activeTab === 'evidence' ? 'text-white' : 'text-slate-400'}`} />
+                    <span>Evidence Submission</span>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Officer Workspace - Section 1: Core Forensic File */}
+                <div className="space-y-1">
+                  <div className="px-3 py-1 flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Core Case File
+                    </span>
+                    <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                      LEO
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('overview')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'overview'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <FileText className={`w-4 h-4 ${activeTab === 'overview' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Dossier Overview</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('visual')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'visual' || activeTab === 'graph'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Network className={`w-4 h-4 ${activeTab === 'visual' || activeTab === 'graph' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Forensic Graph</span>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      activeTab === 'visual' || activeTab === 'graph' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      2D / Flow
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('trail')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'trail'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Activity className={`w-4 h-4 ${activeTab === 'trail' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Peeling Trail</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('syndicate')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'syndicate'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Link2 className={`w-4 h-4 ${activeTab === 'syndicate' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Syndicate Links</span>
+                    </div>
+                    {syndicateIntel?.is_part_of_syndicate ? (
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+
+                {/* Section 2: AI Intelligence & Analysis */}
+                <div className="space-y-1 pt-3 border-t border-slate-100">
+                  <div className="px-3 py-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Intelligence & AI
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('copilot')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'copilot'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Brain className={`w-4 h-4 ${activeTab === 'copilot' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>AI Copilot</span>
+                    </div>
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase ${
+                      activeTab === 'copilot' ? 'bg-blue-700 text-white' : 'bg-purple-50 text-purple-700'
+                    }`}>
+                      Live
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('risk')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'risk' || activeTab === 'patterns'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <AlertCircle className={`w-4 h-4 ${activeTab === 'risk' || activeTab === 'patterns' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Risk & Heuristics</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('evidence')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'evidence'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Database className={`w-4 h-4 ${activeTab === 'evidence' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Evidence Vault</span>
+                    </div>
+                    {evidenceList.length > 0 && (
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                        activeTab === 'evidence' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {evidenceList.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('timeline')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'timeline'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Clock className={`w-4 h-4 ${activeTab === 'timeline' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Timeline</span>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Section 3: Legal & Team Collaboration */}
+                <div className="space-y-1 pt-3 border-t border-slate-100">
+                  <div className="px-3 py-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Compliance & Legal
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('reports')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'reports'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <FileCheck2 className={`w-4 h-4 ${activeTab === 'reports' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Legal Reports</span>
+                    </div>
+                    {reportsList.length > 0 && (
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                        activeTab === 'reports' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {reportsList.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('geo')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'geo'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Building2 className={`w-4 h-4 ${activeTab === 'geo' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Geo Jurisdictions</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('collaboration')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'collaboration'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className={`w-4 h-4 ${activeTab === 'collaboration' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Collaboration</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('audit')}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'audit'
+                        ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <History className={`w-4 h-4 ${activeTab === 'audit' ? 'text-white' : 'text-slate-400'}`} />
+                      <span>Audit Trail</span>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: The Canvas (9 cols) */}
+        <div className="md:col-span-8 lg:col-span-9 min-w-0">
 
       {/* Tab 1: Overview */}
       {activeTab === 'overview' && (
@@ -1033,18 +1352,25 @@ Specialized Law Enforcement Forensic Unit
 
       {/* Tab 4: Risk Analysis */}
       {activeTab === 'risk' && (
-        <RiskBreakdown
-          assessment={riskData?.risk_assessment || null}
-          mlAssessment={{
-            ml_risk_probability: 0.94,
-            top_features: [
-              { feature: 'rapid_movement_indicator', value: 1.0 },
-              { feature: 'fund_splitting_score', value: 0.8 },
-              { feature: 'hop_count', value: 4 },
-              { feature: 'high_risk_connections', value: 1 }
-            ]
-          }}
-        />
+        <div className="space-y-6">
+          <AdvancedForensicsPanel 
+            caseId={caseId}
+            transactions={transactions} 
+            suspectWallet={caseData?.suspect_wallet || ''} 
+          />
+          <RiskBreakdown
+            assessment={riskData?.risk_assessment || null}
+            mlAssessment={{
+              ml_risk_probability: 0.94,
+              top_features: [
+                { feature: 'rapid_movement_indicator', value: 1.0 },
+                { feature: 'fund_splitting_score', value: 0.8 },
+                { feature: 'hop_count', value: 4 },
+                { feature: 'high_risk_connections', value: 1 }
+              ]
+            }}
+          />
+        </div>
       )}
 
       {/* Tab 5: Suspicious Patterns */}
@@ -1118,7 +1444,13 @@ Specialized Law Enforcement Forensic Unit
 
       {/* Tab 7: Investigation Copilot */}
       {activeTab === 'copilot' && (
-        <CopilotDrawer caseId={caseId} />
+        <CopilotDrawer 
+          caseId={caseId} 
+          onNavigateTab={(tab) => setActiveTab(tab as any)}
+          onOpenSubpoena={() => handleDownloadSubpoena(caseData?.suspect_wallet)}
+          onOpenNotice91={() => setShowSection91Modal(true)}
+          onGenerateReport={handleGenerateReport}
+        />
       )}
 
       {/* Tab 8: Watchlist & Alerts */}
@@ -1272,9 +1604,12 @@ Specialized Law Enforcement Forensic Unit
       {/* Tab 12: Team Collaboration */}
       {activeTab === 'collaboration' && (
         <div className="space-y-4">
-          <CollaborationPanel caseId={caseId} />
+          <CollaborationPanel caseId={caseId} currentUser={currentUser} caseData={caseData} />
         </div>
       )}
+
+        </div>
+      </div>
 
       {/* Case Status Lifecycle Modal */}
       {showStatusModal && (

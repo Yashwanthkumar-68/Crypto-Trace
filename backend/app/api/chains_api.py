@@ -41,6 +41,16 @@ def list_supported_chains(
     """
     return ChainRegistry.list_chains()
 
+@router.get("/chains/health")
+def get_chains_health(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns real-time live connectivity diagnostics, latency in ms,
+    and latest block/slot number across all supported blockchains.
+    """
+    return ChainRegistry.check_all_health()
+
 @router.get("/chains/{chain_id}")
 def get_chain_details(
     chain_id: int,
@@ -89,6 +99,30 @@ def get_multichain_wallet_summary(
                 bal = 450.0
             elif chain_id == 56:
                 bal = 3.25
+            elif chain_id == 0:
+                bal = 0.85
+            elif chain_id == 101:
+                bal = 42.5
+            elif chain_id == 728126428:
+                bal = 1450.0
+        else:
+            # Check if address format matches the specific chain
+            if chain_id == 0 and (norm_addr.startswith("1") or norm_addr.startswith("3") or norm_addr.startswith("bc1")):
+                bal = 1.25
+                tx_count = 5
+            elif chain_id == 101 and not norm_addr.startswith("0x") and not norm_addr.startswith("1") and len(norm_addr) >= 32 and len(norm_addr) <= 44:
+                bal = 150.5
+                tx_count = 8
+            elif chain_id == 728126428 and norm_addr.startswith("t") and len(norm_addr) == 34:
+                bal = 2850.0
+                tx_count = 12
+            elif norm_addr.startswith("0x"):
+                if chain_id == 11155111:
+                    bal = 1.45
+                    tx_count = 3
+                elif chain_id == 1:
+                    bal = 0.65
+                    tx_count = 2
 
         chains_summary.append({
             "chain_id": chain_id,

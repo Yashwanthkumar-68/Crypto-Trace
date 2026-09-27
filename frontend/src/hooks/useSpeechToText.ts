@@ -5,6 +5,7 @@ declare global {
   interface Window {
     SpeechRecognition: any;
     webkitSpeechRecognition: any;
+    __cryptoTraceUtterance?: any;
   }
 }
 
@@ -19,7 +20,7 @@ export interface UseSpeechToTextOptions {
 export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   const {
     lang = 'en-IN',
-    continuous = false,
+    continuous = true,
     onResult,
     onSpeechFinal,
     onError
@@ -34,7 +35,11 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   const recognitionRef = useRef<any>(null);
   const animFrameRef = useRef<number | null>(null);
   const silenceTimerRef = useRef<any>(null);
+  const speechWatchdogRef = useRef<any>(null);
   const latestTranscriptRef = useRef<string>('');
+  const shouldBeListeningRef = useRef<boolean>(false);
+  const isSpeakingRef = useRef<boolean>(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
@@ -48,14 +53,18 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   // Preload speech synthesis voices immediately on mount
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
+      try {
         window.speechSynthesis.getVoices();
-      };
+        window.speechSynthesis.onvoiceschanged = () => {
+          try {
+            window.speechSynthesis.getVoices();
+          } catch (e) {}
+        };
+      } catch (e) {}
     }
   }, []);
 
-  // Check SpeechRecognition support on mount
+  // Initialize SpeechRecognition on mount & when lang changes
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -72,53 +81,70 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
         };
 
         recognition.onresult = (event: any) => {
-          let currentTranscript = '';
+          let fullTranscript = '';
           let isFinalResult = false;
 
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            currentTranscript += event.results[i][0].transcript;
+          // Assemble the complete transcript across all results in this session
+          for (let i = 0; i < event.results.length; i++) {
+            const piece = event.results[i][0]?.transcript || '';
+            fullTranscript += piece + ' ';
             if (event.results[i].isFinal) {
               isFinalResult = true;
             }
           }
 
-          const trimmed = currentTranscript.trim();
-          latestTranscriptRef.current = trimmed;
-          setTranscript(trimmed);
-          if (onResultRef.current) onResultRef.current(trimmed);
-
-          // Clear previous silence timer
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-          }
-
-          // If silence detected or browser marks result as final
+          const trimmed = fullTranscript.trim();
           if (trimmed.length > 0) {
+            latestTranscriptRef.current = trimmed;
+            setTranscript(trimmed);
+            if (onResultRef.current) onResultRef.current(trimmed);
+
+            // Clear previous silence timer
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+            }
+
+            // Auto-advance after silence (800ms for final, 1200ms for interim)
             silenceTimerRef.current = setTimeout(() => {
               const textToEmit = latestTranscriptRef.current.trim();
               if (textToEmit.length > 0 && onSpeechFinalRef.current) {
-                // Reset so the same phrase is not processed repeatedly
                 latestTranscriptRef.current = '';
                 setTranscript('');
                 onSpeechFinalRef.current(textToEmit);
               }
-            }, isFinalResult ? 700 : 1200);
+            }, isFinalResult ? 800 : 1200);
           }
         };
 
         recognition.onerror = (event: any) => {
-          // 'no-speech' is a normal timeout when user is silent
+          // 'no-speech' is a normal timeout when the user is silent
           if (event.error !== 'no-speech') {
             console.warn('[SpeechToText] recognition error:', event.error);
           }
-          setIsListening(false);
-          stopWaveform();
-          if (onError) onError(event);
+          if (event.error === 'not-allowed') {
+            shouldBeListeningRef.current = false;
+            setIsListening(false);
+            stopWaveform();
+          }
+          if (onErrorRef.current) onErrorRef.current(event);
         };
 
         recognition.onend = () => {
-          setIsListening(false);
           stopWaveform();
+          // In Chrome, recognition stops automatically after silence.
+          // If we should still be listening and we're not speaking, restart it!
+          if (shouldBeListeningRef.current && !isSpeakingRef.current) {
+            try {
+              recognition.start();
+              setIsListening(true);
+              simulateWaveform();
+            } catch (e) {
+              // Might already be active
+              setIsListening(false);
+            }
+          } else {
+            setIsListening(false);
+          }
         };
 
         recognitionRef.current = recognition;
@@ -131,6 +157,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
     }
 
     return () => {
+      shouldBeListeningRef.current = false;
       stopWaveform();
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
@@ -162,6 +189,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   };
 
   const startListening = useCallback(() => {
+    shouldBeListeningRef.current = true;
     if (!recognitionRef.current) return;
     try {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -169,14 +197,20 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
       setTranscript('');
       recognitionRef.current.lang = lang;
       recognitionRef.current.start();
+      setIsListening(true);
+      simulateWaveform();
     } catch (e) {
       // In case it's already active, ignore or restart
       try {
         recognitionRef.current.stop();
         setTimeout(() => {
           try {
-            recognitionRef.current.lang = lang;
-            recognitionRef.current.start();
+            if (shouldBeListeningRef.current) {
+              recognitionRef.current.lang = lang;
+              recognitionRef.current.start();
+              setIsListening(true);
+              simulateWaveform();
+            }
           } catch (err) {}
         }, 150);
       } catch (err) {}
@@ -184,6 +218,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   }, [lang]);
 
   const stopListening = useCallback(() => {
+    shouldBeListeningRef.current = false;
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (!recognitionRef.current) return;
     try {
@@ -199,49 +234,92 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
     setTranscript('');
   }, []);
 
-  // Text-To-Speech (Virtual Police Officer Voice)
+  // Text-To-Speech (Virtual Police Officer Voice) with Chrome GC protection and watchdog
   const speak = useCallback((text: string, voiceLang: string = lang, onFinish?: () => void) => {
     if (!('speechSynthesis' in window)) {
       if (onFinish) onFinish();
       return;
     }
+
     try {
-      window.speechSynthesis.cancel(); // Stop prior speech immediately
+      // Cancel previous speech and resume if paused
+      window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      if (speechWatchdogRef.current) {
+        clearTimeout(speechWatchdogRef.current);
+      }
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = voiceLang;
-      utterance.rate = 1.05; // Slightly faster, natural pacing
+      utterance.rate = 1.05;
       utterance.pitch = 1.0;
 
-      // Select high quality voice if available
+      // Select matching voice
       const voices = window.speechSynthesis.getVoices();
       const matchVoice = voices.find(v => v.lang === voiceLang || v.lang.startsWith(voiceLang.slice(0, 2)));
       if (matchVoice) {
         utterance.voice = matchVoice;
       }
 
-      utterance.onstart = () => setIsSpeaking(true);
+      // CRITICAL: Store utterance in ref AND window to prevent Chrome V8 Garbage Collection bug
+      utteranceRef.current = utterance;
+      window.__cryptoTraceUtterance = utterance;
+
+      let hasFinished = false;
+      const safeFinish = () => {
+        if (hasFinished) return;
+        hasFinished = true;
+        if (speechWatchdogRef.current) clearTimeout(speechWatchdogRef.current);
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        utteranceRef.current = null;
+        if (onFinish) onFinish();
+      };
+
+      utterance.onstart = () => {
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+      };
+
       utterance.onend = () => {
-        setIsSpeaking(false);
-        if (onFinish) onFinish();
+        safeFinish();
       };
+
       utterance.onerror = () => {
-        setIsSpeaking(false);
-        if (onFinish) onFinish();
+        safeFinish();
       };
+
+      // Watchdog: If browser audio hangs or blocks autoplay, trigger safeFinish automatically!
+      // ~70ms per character + 1500ms grace period, max 8 seconds
+      const maxSpeechMs = Math.min(8000, Math.max(2000, text.length * 70 + 1500));
+      speechWatchdogRef.current = setTimeout(() => {
+        if (!hasFinished) {
+          console.warn('[SpeechSynthesis] Watchdog timeout elapsed, resuming flow.');
+          safeFinish();
+        }
+      }, maxSpeechMs);
 
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.warn('[SpeechSynthesis] Failed to speak:', err);
+      isSpeakingRef.current = false;
       setIsSpeaking(false);
       if (onFinish) onFinish();
     }
   }, [lang]);
 
   const stopSpeaking = useCallback(() => {
+    if (speechWatchdogRef.current) {
+      clearTimeout(speechWatchdogRef.current);
+    }
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+      isSpeakingRef.current = false;
       setIsSpeaking(false);
+      utteranceRef.current = null;
     }
   }, []);
 

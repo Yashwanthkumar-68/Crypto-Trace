@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Shield, Radio, UserCheck, LogOut, Terminal, Bell, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Shield, Radio, UserCheck, LogOut, Terminal, Bell, AlertTriangle, ShieldCheck, ChevronDown } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 import { NotificationCenter } from './NotificationCenter';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
+import { RequireRole } from './auth/RequireRole';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -29,7 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
   return (
-    <header className="bg-[#0F172A] border-b border-slate-800 sticky top-0 z-50 backdrop-blur-md shadow-md">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand */}
@@ -42,307 +43,126 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-blue-500 to-indigo-400 p-0.5 shadow-md flex items-center justify-center">
-              <div className="w-full h-full bg-[#0F172A] rounded-[10px] flex items-center justify-center">
-                <Shield className="w-5 h-5 text-blue-400" />
+              <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+                <Shield className="w-5 h-5 text-blue-600" />
               </div>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-base tracking-wider text-white">
+                <span className="font-extrabold text-sm sm:text-base tracking-wider text-slate-900">
                   CryptoTrace
                 </span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/50">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                   {t('brand.badge', 'DEFENSE FORENSICS')}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 hidden sm:block font-medium">
+              <p className="text-[11px] text-slate-500 hidden sm:block font-medium">
                 {t('brand.subtitle', 'Real-Time VASP Identification & Money Trail Analytics')}
               </p>
             </div>
           </div>
 
           {/* Role-tailored Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1">
-            {currentUser?.role === 'VICTIM' ? (
-              <>
-                <button
+          <nav className="hidden md:flex items-center gap-4">
+            
+            {/* Victim Navigation */}
+            <RequireRole allowedRoles={['VICTIM']} currentUser={currentUser}>
+               <button
                   onClick={() => onSelectTab('victim_dashboard')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                     activeTab === 'victim_dashboard'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   {t('nav.my_complaints', 'My Complaints')}
                 </button>
                 <button
-                  onClick={() => onSelectTab('verify_wallet')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeTab === 'verify_wallet'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                      : 'text-amber-300 hover:text-white hover:bg-slate-800/70 border border-amber-500/30'
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{t('nav.verify_wallet', 'Verify Wallet')}</span>
-                </button>
-                <button
                   onClick={() => onSelectTab('create_case')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                     activeTab === 'create_case'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   {t('nav.file_complaint', 'File Complaint')}
                 </button>
-              </>
-            ) : currentUser?.role === 'INVESTIGATOR' ? (
-              <>
-                <button
+            </RequireRole>
+
+            {/* Investigator & Supervisor Navigation (Dropdowns) */}
+            <RequireRole allowedRoles={['INVESTIGATOR', 'SUPERVISOR', 'ADMINISTRATOR']} currentUser={currentUser}>
+              
+              <button
                   onClick={() => onSelectTab('investigator_dashboard')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'investigator_dashboard'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Officer Caseload
-                </button>
-                <button
-                  onClick={() => onSelectTab('cases')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'cases' || activeTab === 'case_detail'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Case Ledger
-                </button>
-                <button
-                  onClick={() => onSelectTab('verify_wallet')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeTab === 'verify_wallet'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                      : 'text-amber-300 hover:text-white hover:bg-slate-800/70 border border-amber-500/30'
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Verify Wallet</span>
-                </button>
-                <button
-                  onClick={() => onSelectTab('priority')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'priority'
-                      ? 'bg-[#DC2626] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Priority Queue
-                </button>
-                <button
-                  onClick={() => onSelectTab('intelligence')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'intelligence'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Risk & Intel
-                </button>
-                <button
-                  onClick={() => onSelectTab('multichain')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'multichain'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Multi-Chain
-                </button>
-                <button
-                  onClick={() => onSelectTab('analytics')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'analytics'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Analytics
-                </button>
-                <button
-                  onClick={() => onSelectTab('batch')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'batch'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Batch Trace
-                </button>
-                <button
-                  onClick={() => onSelectTab('monitoring')}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'monitoring'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Monitoring
-                  {alertCount > 0 && (
-                    <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-[#DC2626] text-white rounded-full text-[9px] font-bold animate-pulse">
-                      {alertCount}
-                    </span>
-                  )}
-                </button>
-              </>
-            ) : currentUser?.role === 'SUPERVISOR' ? (
-              <>
-                <button
-                  onClick={() => onSelectTab('dashboard')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'dashboard'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Command Dashboard
-                </button>
-                <button
-                  onClick={() => onSelectTab('cases')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'cases' || activeTab === 'case_detail'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Case Ledger & Reviews
-                </button>
-                <button
-                  onClick={() => onSelectTab('priority')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'priority'
-                      ? 'bg-[#DC2626] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Priority Triage
-                </button>
-                <button
-                  onClick={() => onSelectTab('admin')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'admin'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Officer Roster & VASP
-                </button>
-                <button
-                  onClick={() => onSelectTab('analytics')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'analytics'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Analytics
-                </button>
-                <button
-                  onClick={() => onSelectTab('batch')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'batch'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Batch Trace
-                </button>
-                <button
-                  onClick={() => onSelectTab('monitoring')}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'monitoring'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Watchlist & Alerts
-                  {alertCount > 0 && (
-                    <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-[#DC2626] text-white rounded-full text-[9px] font-bold animate-pulse">
-                      {alertCount}
-                    </span>
-                  )}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => onSelectTab('dashboard')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'dashboard'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === 'investigator_dashboard' || activeTab === 'dashboard'
+                      ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   Dashboard
+              </button>
+
+              {/* Cases Dropdown */}
+              <div className="relative group">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+                  Cases <ChevronDown className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => onSelectTab('cases')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'cases' || activeTab === 'case_detail'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Case Ledger
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 py-1">
+                  <button onClick={() => onSelectTab('cases')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Case Ledger</button>
+                  <button onClick={() => onSelectTab('priority')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Priority Queue</button>
+                </div>
+              </div>
+
+              {/* Forensics Dropdown */}
+              <div className="relative group">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+                  Forensics <ChevronDown className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => onSelectTab('priority')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'priority'
-                      ? 'bg-[#DC2626] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Priority Queue
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 py-1">
+                  <button onClick={() => onSelectTab('verify_wallet')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-500" /> Verify Wallet</button>
+                  <button onClick={() => onSelectTab('multichain')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Multi-Chain Trace</button>
+                  <button onClick={() => onSelectTab('batch')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Batch Analysis</button>
+                </div>
+              </div>
+
+              {/* Intelligence Dropdown */}
+              <div className="relative group">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+                  Intelligence <ChevronDown className="w-3.5 h-3.5" />
                 </button>
-                <button
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 py-1">
+                  <button onClick={() => onSelectTab('analytics')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Analytics</button>
+                  <button onClick={() => onSelectTab('intelligence')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600">Risk & Intel</button>
+                  <button onClick={() => onSelectTab('monitoring')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center justify-between">
+                    Monitoring
+                    {alertCount > 0 && <span className="bg-red-500 text-white rounded-full px-1.5 text-[10px]">{alertCount}</span>}
+                  </button>
+                </div>
+              </div>
+
+            </RequireRole>
+
+            <RequireRole allowedRoles={['SUPERVISOR', 'ADMINISTRATOR']} currentUser={currentUser}>
+               <button
                   onClick={() => onSelectTab('admin')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                     activeTab === 'admin'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                      ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   Administration
-                </button>
-                <button
-                  onClick={() => onSelectTab('monitoring')}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'monitoring'
-                      ? 'bg-[#2563EB] text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                  }`}
-                >
-                  Monitoring
-                  {alertCount > 0 && (
-                    <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-[#DC2626] text-white rounded-full text-[9px] font-bold animate-pulse">
-                      {alertCount}
-                    </span>
-                  )}
-                </button>
-              </>
-            )}
+              </button>
+            </RequireRole>
           </nav>
 
           {/* Controls: Mode Toggle, Chain Selector, User Role, Profile */}
           <div className="flex items-center gap-2.5">
             {/* Unified Live Blockchain & Forensic Engine */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-mono text-slate-200 shadow-sm">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-semibold text-emerald-400">Sepolia (11155111)</span>
-              <span className="text-slate-500">•</span>
-              <span className="text-slate-400">Unified Live Sync</span>
+              <span className="font-semibold text-emerald-600">Sepolia</span>
             </div>
 
             {/* Smart Multilingual Language Switcher */}
@@ -356,15 +176,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowRoleMenu(!showRoleMenu)}
-                  className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition-colors"
                 >
-                  <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                    <UserCheck className="w-3.5 h-3.5" />
+                  </div>
                   <div className="text-left hidden lg:block">
-                    <p className="text-xs font-semibold text-white leading-tight">
+                    <p className="text-xs font-semibold text-slate-900 leading-tight">
                       {currentUser.full_name}
                     </p>
-                    <p className="text-[10px] text-blue-300 font-mono font-medium">
-                      [{currentUser.role}]
+                    <p className="text-[10px] text-slate-500 font-mono font-medium">
+                      {currentUser.role}
                     </p>
                   </div>
                 </button>
@@ -383,7 +205,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           {currentUser.role}
                         </span>
                         {currentUser.badge_number && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-50 text-slate-600 border border-slate-200">
                             Badge: {currentUser.badge_number}
                           </span>
                         )}
@@ -408,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             
             {/* Mobile Menu Toggle */}
             <button 
-              className="md:hidden ml-2 p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700"
+              className="md:hidden ml-1 p-2 rounded-lg bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-sm"
               onClick={() => setShowRoleMenu(!showRoleMenu)}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -418,36 +240,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Mobile Navigation Menu */}
         {showRoleMenu && (
-          <nav className="md:hidden py-3 border-t border-slate-800 flex flex-col gap-2">
-             {currentUser?.role === 'INVESTIGATOR' && (
-              <>
-                <button onClick={() => onSelectTab('investigator_dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'investigator_dashboard' ? 'text-white' : 'text-slate-400'}`}>Officer Caseload</button>
-                <button onClick={() => onSelectTab('cases')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'cases' ? 'text-white' : 'text-slate-400'}`}>Case Ledger</button>
-                <button onClick={() => onSelectTab('priority')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'priority' ? 'text-white' : 'text-slate-400'}`}>Priority Queue</button>
-                <button onClick={() => onSelectTab('intelligence')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'intelligence' ? 'text-white' : 'text-slate-400'}`}>Risk & Intel</button>
-                <button onClick={() => onSelectTab('multichain')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'multichain' ? 'text-white' : 'text-slate-400'}`}>Multi-Chain</button>
-                <button onClick={() => onSelectTab('analytics')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'analytics' ? 'text-white' : 'text-slate-400'}`}>Analytics</button>
-                <button onClick={() => onSelectTab('batch')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'batch' ? 'text-white' : 'text-slate-400'}`}>Batch Trace</button>
-                <button onClick={() => onSelectTab('monitoring')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'monitoring' ? 'text-white' : 'text-slate-400'}`}>Monitoring</button>
-              </>
-            )}
-            {currentUser?.role === 'SUPERVISOR' && (
-              <>
-                <button onClick={() => onSelectTab('dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'dashboard' ? 'text-white' : 'text-slate-400'}`}>Command Dashboard</button>
-                <button onClick={() => onSelectTab('cases')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'cases' ? 'text-white' : 'text-slate-400'}`}>Case Ledger & Reviews</button>
-                <button onClick={() => onSelectTab('priority')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'priority' ? 'text-white' : 'text-slate-400'}`}>Priority Triage</button>
-                <button onClick={() => onSelectTab('admin')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'admin' ? 'text-white' : 'text-slate-400'}`}>Officer Roster & VASP</button>
-                <button onClick={() => onSelectTab('analytics')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'analytics' ? 'text-white' : 'text-slate-400'}`}>Analytics</button>
-                <button onClick={() => onSelectTab('batch')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'batch' ? 'text-white' : 'text-slate-400'}`}>Batch Trace</button>
-                <button onClick={() => onSelectTab('monitoring')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'monitoring' ? 'text-white' : 'text-slate-400'}`}>Watchlist & Alerts</button>
-              </>
-            )}
-             {currentUser?.role === 'VICTIM' && (
-              <>
-                <button onClick={() => onSelectTab('victim_dashboard')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'victim_dashboard' ? 'text-white' : 'text-slate-400'}`}>My Complaints</button>
-                <button onClick={() => onSelectTab('create_case')} className={`text-left px-3 py-2 text-xs font-semibold ${activeTab === 'create_case' ? 'text-white' : 'text-slate-400'}`}>File Complaint</button>
-              </>
-            )}
+          <nav className="md:hidden py-3 border-t border-slate-200 flex flex-col gap-2 bg-white">
+            <RequireRole allowedRoles={['INVESTIGATOR', 'SUPERVISOR', 'ADMINISTRATOR']} currentUser={currentUser}>
+              <button onClick={() => onSelectTab('investigator_dashboard')} className="text-left px-4 py-2 text-sm text-slate-600">Dashboard</button>
+              <button onClick={() => onSelectTab('cases')} className="text-left px-4 py-2 text-sm text-slate-600">Cases</button>
+              <button onClick={() => onSelectTab('analytics')} className="text-left px-4 py-2 text-sm text-slate-600">Intelligence</button>
+            </RequireRole>
+            <RequireRole allowedRoles={['VICTIM']} currentUser={currentUser}>
+              <button onClick={() => onSelectTab('victim_dashboard')} className="text-left px-4 py-2 text-sm text-slate-600">My Complaints</button>
+              <button onClick={() => onSelectTab('create_case')} className="text-left px-4 py-2 text-sm text-slate-600">File Complaint</button>
+            </RequireRole>
           </nav>
         )}
       </div>

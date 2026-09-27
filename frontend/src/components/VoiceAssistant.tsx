@@ -3,7 +3,7 @@ import {
   Mic, MicOff, Volume2, VolumeX, Send, Bot, User as UserIcon,
   Shield, AlertTriangle, CheckCircle2, ArrowRight, RefreshCw,
   Sparkles, ShieldAlert, FileText, CornerDownLeft, Info, HelpCircle,
-  UserCheck
+  UserCheck, Check
 } from 'lucide-react';
 import { useSpeechToText } from '../hooks/useSpeechToText';
 import { parseSpokenAmount, extractWalletAddress, extractTransactionHash } from '../utils/hindiNumberParser';
@@ -46,11 +46,12 @@ interface QuestionConfig {
   quickRepliesHi: string[];
 }
 
+// Aligned with the AI's natural intake ordering: Name -> Amount -> Suspect Wallet -> Modus Operandi -> Details -> Investigator
 const BASE_QUESTIONS: QuestionConfig[] = [
   {
     id: 1,
     field: 'victim_name',
-    questionEn: 'Hello! I am CryptoTrace AI Intake Officer. I am here to help you lodge your cybercrime complaint safely. First, what is your full name?',
+    questionEn: 'Hello! I am CryptoTrace AI Intake Officer. I am here to help you lodge your official cybercrime complaint. First, what is your full name?',
     questionHi: 'नमस्ते! मैं CryptoTrace AI साइबर अधिकारी हूं। आपकी शिकायत दर्ज करने में मदद करूंगा। सबसे पहले, अपना पूरा नाम बताएं।',
     placeholderEn: 'e.g. Rahul Sharma',
     placeholderHi: 'उदा. राहुल शर्मा',
@@ -59,63 +60,43 @@ const BASE_QUESTIONS: QuestionConfig[] = [
   },
   {
     id: 2,
-    field: 'scam_channel',
-    questionEn: 'How were you approached by the fraudster? Was it through Telegram, WhatsApp, a part-time job task, or a fake police call?',
-    questionHi: 'धोखेबाज ने आपसे कैसे संपर्क किया? क्या यह टेलीग्राम, व्हाट्सएप, टास्क स्कीम, या फर्जी पुलिस कॉल के जरिए हुआ?',
-    placeholderEn: 'e.g. Telegram VIP Investment Group',
-    placeholderHi: 'उदा. टेलीग्राम वीआईपी इन्वेस्टमेंट ग्रुप',
-    quickRepliesEn: ['Telegram Investment Group', 'WhatsApp Part-Time Job Scheme', 'Fake CBI / Police Digital Arrest', 'Romance / Trading Platform'],
-    quickRepliesHi: ['टेलीग्राम इन्वेस्टमेंट ग्रुप', 'व्हाट्सएप पार्ट-टाइम टास्क जॉब', 'फर्जी पुलिस / CBI डिजिटल अरेस्ट', 'रोमांस / ट्रेडिंग प्लेटफार्म']
-  },
-  {
-    id: 3,
     field: 'amount_lost',
-    questionEn: 'How much money did you lose in total? You can speak in Rupees (e.g. "Five Lakh Rupees" or "50,000").',
-    questionHi: 'आपको कुल कितने रुपयों का नुकसान हुआ? आप बोल सकते हैं (उदा. "पांच लाख रुपये" या "पचास हजार").',
-    placeholderEn: 'e.g. 5,00,000 INR (Five Lakhs)',
-    placeholderHi: 'उदा. पांच लाख रुपये (₹5,00,000)',
+    questionEn: 'How much money or cryptocurrency did you lose in total? You can speak in Rupees (e.g. "50,000" or "Two Lakhs").',
+    questionHi: 'आपको कुल कितने रुपयों का नुकसान हुआ? आप बोल सकते हैं (उदा. "पचास हजार" या "दो लाख रुपये").',
+    placeholderEn: 'e.g. 2,50,000 INR (Two Lakhs Fifty Thousand)',
+    placeholderHi: 'उदा. ₹2,50,000 (दो लाख रुपये)',
     quickRepliesEn: ['₹50,000', '₹2,50,000 (Two Lakhs Fifty Thousand)', '₹5,00,000 (Five Lakhs)', '₹15,00,000 (Fifteen Lakhs)'],
     quickRepliesHi: ['₹50,000 (पचास हजार)', '₹2,50,000 (ढाई लाख रुपये)', '₹5,00,000 (पांच लाख रुपये)', '₹15,00,000 (पंद्रह लाख रुपये)']
   },
   {
-    id: 4,
+    id: 3,
     field: 'suspect_wallet',
-    questionEn: 'What is the scammer\'s cryptocurrency wallet address where the funds were transferred? You can paste or dictate it.',
-    questionHi: 'स्कैमर का क्रिप्टोकरंसी वॉलेट एड्रेस क्या है जहाँ पैसे ट्रांसफर किए गए थे? आप इसे पेस्ट या बोल सकते हैं।',
+    questionEn: 'What is the scammer\'s cryptocurrency wallet address or Transaction Hash where the funds were sent?',
+    questionHi: 'स्कैमर का क्रिप्टोकरंसी वॉलेट एड्रेस या ट्रांजैक्शन हैश क्या है जहाँ पैसे ट्रांसफर किए गए थे?',
     placeholderEn: 'e.g. 0x742d35cc6634c0532925a3b844bc454e4438f44e',
     placeholderHi: 'उदा. 0x742d35cc6634c0532925a3b844bc454e4438f44e',
     quickRepliesEn: ['0x742d35cc6634c0532925a3b844bc454e4438f44e', '0x28c6c06298d514db089934071355e5743bf21d60', 'I do not have the wallet right now'],
     quickRepliesHi: ['0x742d35cc6634c0532925a3b844bc454e4438f44e', '0x28c6c06298d514db089934071355e5743bf21d60', 'मेरे पास अभी वॉलेट एड्रेस नहीं है']
   },
   {
+    id: 4,
+    field: 'scam_channel',
+    questionEn: 'How were you approached by the fraudster? Was it through Telegram, WhatsApp, a task scheme, or a fake police call?',
+    questionHi: 'धोखेबाज ने आपसे कैसे संपर्क किया? क्या यह टेलीग्राम, व्हाट्सएप, टास्क स्कीम, या फर्जी पुलिस कॉल के जरिए हुआ?',
+    placeholderEn: 'e.g. Telegram VIP Investment Group',
+    placeholderHi: 'उदा. टेलीग्राम वीआईपी इन्वेस्टमेंट ग्रुप',
+    quickRepliesEn: ['Telegram Investment Group', 'WhatsApp Part-Time Job Scheme', 'Fake CBI / Police Digital Arrest', 'Romance / Fake Trading App'],
+    quickRepliesHi: ['टेलीग्राम इन्वेस्टमेंट ग्रुप', 'व्हाट्सएप पार्ट-टाइम टास्क जॉब', 'फर्जी पुलिस / CBI डिजिटल अरेस्ट', 'रोमांस / ट्रेडिंग प्लेटफार्म']
+  },
+  {
     id: 5,
-    field: 'blockchain',
-    questionEn: 'Which cryptocurrency or blockchain network was used? (e.g. Ethereum, USDT on Tron, Polygon, or Bitcoin)',
-    questionHi: 'किस ब्लॉकचेन या क्रिप्टोकरंसी नेटवर्क का इस्तेमाल हुआ था? (उदा. इथेरियम, पॉलीगॉन, टीथर यूएसडीटी या बिटकॉइन)',
-    placeholderEn: 'e.g. Ethereum (ERC-20 USDT)',
-    placeholderHi: 'उदा. इथेरियम (Ethereum)',
-    quickRepliesEn: ['Ethereum', 'Polygon', 'Binance Smart Chain (BSC)', 'Tron (TRC-20)', 'Bitcoin'],
-    quickRepliesHi: ['इथेरियम (Ethereum)', 'पॉलीगॉन (Polygon)', 'बाइनेंस चेन (BSC)', 'ट्रॉन (Tron)', 'बिटकॉइन (Bitcoin)']
-  },
-  {
-    id: 6,
-    field: 'transaction_hash',
-    questionEn: 'Do you have the Transaction Hash (TxID) of your initial transfer? (If you don\'t know it, you can say "Skip").',
-    questionHi: 'क्या आपके पास ट्रांसफर का ट्रांजैक्शन हैश (TxID) है? (यदि नहीं पता, तो "छोड़ें" या "Skip" कहें).',
-    placeholderEn: 'e.g. 0x5a3b... or type "Skip"',
-    placeholderHi: 'उदा. 0x5a3b... या "छोड़ें"',
-    quickRepliesEn: ['Skip for now', '0x5a3b844bc454e4438f44e6634c0532925a3b844bc454e4438f44e742d35cc663'],
-    quickRepliesHi: ['अभी के लिए छोड़ें (Skip)', '0x5a3b844bc454e4438f44e6634c0532925a3b844bc454e4438f44e742d35cc663']
-  },
-  {
-    id: 7,
     field: 'description',
-    questionEn: 'Please describe briefly what the scammer told you. Did they promise high returns or demand a fee to unlock your funds?',
+    questionEn: 'Please describe briefly what happened. Did they promise daily returns or demand a tax/fee to unlock withdrawals?',
     questionHi: 'स्कैमर ने आपको क्या झांसा दिया था? क्या उन्होंने दैनिक मुनाफे का वादा किया था या निकासी शुल्क मांगा था?',
-    placeholderEn: 'e.g. Promised 20% daily return, then asked 30% tax to withdraw funds',
-    placeholderHi: 'उदा. 20% दैनिक मुनाफे का वादा किया, बाद में निकासी के लिए 30% टैक्स मांगा',
+    placeholderEn: 'e.g. Promised 20% daily returns, then blocked withdrawals demanding 30% tax',
+    placeholderHi: 'उदा. 20% मुनाफे का वादा किया, बाद में निकासी के लिए 30% टैक्स मांगा',
     quickRepliesEn: [
-      'Promised 250% guaranteed ROI in 24 hours, then refused withdrawal without paying 30% GST.',
+      'Promised 250% guaranteed ROI, then refused withdrawal without paying 30% GST.',
       'Completed online rating tasks, balance showed ₹8 Lakhs, but demanded ₹2 Lakhs security deposit.',
       'Caller claimed to be Cyber Police Mumbai stating my Aadhaar was linked to money laundering.'
     ],
@@ -126,9 +107,9 @@ const BASE_QUESTIONS: QuestionConfig[] = [
     ]
   },
   {
-    id: 8,
+    id: 6,
     field: 'investigator_name',
-    questionEn: 'Which Cybercrime Investigator should be assigned to lead your case? You can choose an approved officer or select Central Queue.',
+    questionEn: 'Which Cybercrime Investigator should lead your case? You can choose an approved officer or select Central Queue.',
     questionHi: 'इस केस की जांच के लिए आप किस साइबर अधिकारी को नियुक्त करना चाहते हैं? आप अधिकारी चुन सकते हैं या सेंट्रल कतार चुन सकते हैं।',
     placeholderEn: 'Select an officer or say "Auto Assign"',
     placeholderHi: 'अधिकारी चुनें या "ऑटो असाइन" कहें',
@@ -143,11 +124,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   defaultName = '',
   availableInvestigators = []
 }) => {
-  const [lang, setLang] = useState<'en' | 'hi'>('hi');
+  // Default to English ('en') for reliable browser speech recognition across all environments
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [inputText, setInputText] = useState('');
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Extracted Complaint State
   const [extractedData, setExtractedData] = useState<ExtractedComplaintData>({
@@ -168,7 +151,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
 
   // Dynamic Questions with loaded investigators
   const questions: QuestionConfig[] = BASE_QUESTIONS.map(q => {
-    if (q.id === 8 && availableInvestigators && availableInvestigators.length > 0) {
+    if (q.field === 'investigator_name' && availableInvestigators && availableInvestigators.length > 0) {
       const officerNames = availableInvestigators.map(inv => `${inv.full_name} (${inv.department || inv.organization || 'Cyber Crime Cell'})`);
       return {
         ...q,
@@ -196,7 +179,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const isAutoAdvancingRef = useRef(false);
 
-  // Synchronized refs to avoid stale closures in speech recognition
+  // Synchronized refs to avoid stale closures in speech callbacks
   const currentStepRef = useRef(currentStepIndex);
   currentStepRef.current = currentStepIndex;
 
@@ -206,7 +189,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   const isDoneRef = useRef(isDone);
   isDoneRef.current = isDone;
 
-  // Speech Hook with Auto-Advance on pause/final transcript
+  const langRef = useRef(lang);
+  langRef.current = lang;
+
+  // Speech Hook with Auto-Advance on pause
   const {
     isListening,
     transcript,
@@ -219,37 +205,38 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     stopSpeaking
   } = useSpeechToText({
     lang: lang === 'hi' ? 'hi-IN' : 'en-IN',
+    continuous: true,
     onResult: (text) => {
       setInputText(text);
     },
     onSpeechFinal: (finalText) => {
-      // Automatic progression to next question on silence/end of speech!
+      // Auto-advance as soon as user finishes speaking their phrase
       if (!isDoneRef.current && finalText && finalText.trim().length > 0 && !isAutoAdvancingRef.current) {
         isAutoAdvancingRef.current = true;
         handleSendResponse(finalText);
         setTimeout(() => {
           isAutoAdvancingRef.current = false;
-        }, 1200);
+        }, 1500);
       }
     }
   });
 
   // Speak AI question and automatically turn on microphone when AI finishes speaking
   const askQuestionWithAudio = (promptText: string) => {
-    stopListening(); // Mute mic while AI speaks to prevent audio self-transcription loop
+    stopListening(); // Mute mic while AI speaks to prevent audio self-transcription
     resetTranscript();
+
     if (!voiceMuted) {
-      speak(promptText, lang === 'hi' ? 'hi-IN' : 'en-IN', () => {
+      speak(promptText, langRef.current === 'hi' ? 'hi-IN' : 'en-IN', () => {
         // As soon as AI speech completes, automatically turn on the microphone!
         setTimeout(() => {
           if (!isDoneRef.current) {
             resetTranscript();
             startListening();
           }
-        }, 300);
+        }, 250);
       });
     } else {
-      // If voice is muted, automatically start listening immediately
       setTimeout(() => {
         if (!isDoneRef.current) {
           resetTranscript();
@@ -259,27 +246,31 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     }
   };
 
-  // Initialize first greeting and automatically turn on mic
+  // Initialize first greeting on mount / language switch
   useEffect(() => {
     const firstQ = questions[0];
     const initialText = lang === 'hi' ? firstQ.questionHi : firstQ.questionEn;
     const initialMsg = {
-      id: 'init-ai',
+      id: `init-ai-${Date.now()}`,
       sender: 'ai' as const,
       text: initialText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages([initialMsg]);
 
+    // Speak initial greeting and start listening
     askQuestionWithAudio(initialText);
 
-    return () => stopSpeaking();
+    return () => {
+      stopSpeaking();
+      stopListening();
+    };
   }, [lang]);
 
-  // Auto scroll chat
+  // Auto scroll chat to newest message
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, triageAlert]);
+  }, [messages, triageAlert, isListening]);
 
   // Autonomous Agent 2: Background threat lookup when a wallet address is entered
   const runBackgroundThreatTriage = async (walletAddr: string) => {
@@ -317,7 +308,7 @@ DATE: ${dateFormatted}
 "The complainant was systematically induced into transferring cryptocurrency by unknown perpetrators masquerading as legitimate investment coordinators. The perpetrators promised fraudulent high-yield daily returns and subsequently blocked withdrawals by coercing additional payments labeled as processing fees/taxes. The transferred funds entered the aforementioned recipient wallet address."
 
 7. RELIEF SOUGHT:
-Immediate preservation of wallet ledger logs, issuance of statutory notices under Section 91 CrPC to destination Virtual Asset Service Providers (VASPs), freezing of illicit accounts, and apprehension of perpetrators.`;
+Immediate preservation of wallet ledger logs, issuance of statutory notices under Section 91 CrPC / Section 94 BNSS to destination Virtual Asset Service Providers (VASPs), freezing of illicit accounts, and apprehension of perpetrators.`;
   };
 
   const normalizeScamChannel = (spoken: string): string => {
@@ -340,23 +331,30 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
     return spoken.trim();
   };
 
-  // Handle user response submission & auto-transition
-  const handleSendResponse = (answerText: string) => {
-    const cleanAnswer = answerText.trim();
-    if (!cleanAnswer) return;
+  // Helper to determine next question index based on missing fields
+  const calculateNextStepIndex = (data: ExtractedComplaintData): number => {
+    if (!data.victim_name) return 0;
+    if (!data.amount_lost) return 1;
+    if (!data.suspect_wallet) return 2;
+    if (!data.scam_channel) return 3;
+    if (!data.description) return 4;
+    return Math.min(5, questions.length - 1);
+  };
 
+  // Handle user response submission & transition
+  const handleSendResponse = async (answerText: string) => {
+    const cleanAnswer = answerText.trim();
+    if (!cleanAnswer || isProcessing) return;
+
+    setIsProcessing(true);
     stopListening();
     resetTranscript();
     stopSpeaking();
 
-    const curIdx = currentStepRef.current;
-    if (curIdx >= questions.length) return;
-    const currentQ = questions[curIdx];
-
     const updatedData = { ...extractedDataRef.current };
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Append victim message
+    // Append victim message immediately to chat UI
     const victimMsg = {
       id: `victim-${Date.now()}`,
       sender: 'victim' as const,
@@ -364,109 +362,167 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
       timestamp: nowTime
     };
 
-    // Parse specific field values based on question step
-    if (currentQ.field === 'scam_channel') {
-      updatedData.scam_channel = normalizeScamChannel(cleanAnswer);
-    } else if (currentQ.field === 'amount_lost') {
-      const parsed = parseSpokenAmount(cleanAnswer);
-      updatedData.amount_lost = parsed.amount !== null ? parsed.amount : (parseFloat(cleanAnswer.replace(/[^0-9.]/g, '')) || 500000);
-    } else if (currentQ.field === 'suspect_wallet') {
-      const extractedWallet = extractWalletAddress(cleanAnswer) || cleanAnswer;
-      updatedData.suspect_wallet = extractedWallet;
-      // Trigger Background Triage Agent!
-      if (extractedWallet.startsWith('0x') || extractedWallet.length > 25) {
-        runBackgroundThreatTriage(extractedWallet);
-      }
-    } else if (currentQ.field === 'transaction_hash') {
-      if (cleanAnswer.toLowerCase().includes('skip') || cleanAnswer.includes('छोड़ें')) {
-        updatedData.transaction_hash = '';
-      } else {
-        updatedData.transaction_hash = extractTransactionHash(cleanAnswer) || cleanAnswer;
-      }
-    } else if (currentQ.field === 'investigator_name') {
-      updatedData.investigator_name = cleanAnswer;
-      // Match with available investigator IDs
-      if (availableInvestigators && availableInvestigators.length > 0) {
-        const found = availableInvestigators.find(inv => 
-          cleanAnswer.toLowerCase().includes(inv.full_name.toLowerCase()) ||
-          (inv.username && cleanAnswer.toLowerCase().includes(inv.username.toLowerCase()))
-        );
-        if (found) {
-          updatedData.investigator_id = found.id;
-        } else {
-          updatedData.investigator_id = availableInvestigators[0].id;
-        }
-      }
-    } else {
-      (updatedData as any)[currentQ.field] = cleanAnswer;
-    }
+    setMessages(prev => [...prev, victimMsg]);
+    setInputText('');
 
     updatedData.transcript = [
       ...updatedData.transcript,
       { sender: 'victim', text: cleanAnswer, timestamp: nowTime }
     ];
 
-    // Synchronously update both refs and React state
     extractedDataRef.current = updatedData;
-    setExtractedData(updatedData);
-    setMessages(prev => [...prev, victimMsg]);
-    setInputText('');
+    setExtractedData({ ...updatedData });
 
-    // Advance to next question or complete
-    const nextIndex = curIdx + 1;
-    currentStepRef.current = nextIndex;
-    setCurrentStepIndex(nextIndex);
+    // 1. Try sending to the backend Dynamic State-Machine RAG Engine
+    let handledByBackend = false;
+    try {
+      const response = await fetch('/api/agent/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_history: updatedData.transcript.map(t => ({
+            role: t.sender === 'victim' ? 'user' : 'agent',
+            content: t.text
+          })),
+          latest_user_input: cleanAnswer
+        })
+      });
 
-    if (nextIndex < questions.length) {
-      const nextQ = questions[nextIndex];
-      const nextPrompt = lang === 'hi' ? nextQ.questionHi : nextQ.questionEn;
+      if (response.ok) {
+        const aiData = await response.json();
+        const aiReply = aiData.reply_text || "Thank you. Let's proceed with the next detail.";
+        const ext = aiData.extracted_data || {};
 
-      setTimeout(() => {
+        // Merge newly extracted fields into our form state
+        if (ext.victim_name) updatedData.victim_name = ext.victim_name;
+        if (ext.amount_lost) updatedData.amount_lost = ext.amount_lost;
+        if (ext.currency) updatedData.currency = ext.currency;
+        if (ext.blockchain) updatedData.blockchain = ext.blockchain;
+        if (ext.transaction_hash) updatedData.transaction_hash = ext.transaction_hash;
+        if (ext.description) updatedData.description = ext.description;
+        if (ext.scam_channel) updatedData.scam_channel = ext.scam_channel;
+
+        if (ext.suspect_wallet && ext.suspect_wallet !== updatedData.suspect_wallet) {
+          updatedData.suspect_wallet = ext.suspect_wallet;
+          runBackgroundThreatTriage(ext.suspect_wallet);
+        }
+
+        // Match available investigator if mentioned
+        if (availableInvestigators && availableInvestigators.length > 0) {
+          const found = availableInvestigators.find(inv =>
+            cleanAnswer.toLowerCase().includes(inv.full_name.toLowerCase()) ||
+            (inv.username && cleanAnswer.toLowerCase().includes(inv.username.toLowerCase()))
+          );
+          if (found) {
+            updatedData.investigator_id = found.id;
+            updatedData.investigator_name = found.full_name;
+          }
+        }
+
+        // Dynamically compute next question index
+        const nextStep = calculateNextStepIndex(updatedData);
+        setCurrentStepIndex(nextStep);
+        currentStepRef.current = nextStep;
+
+        // Append AI response to chat
+        const aiMsgTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const aiMsg = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai' as const,
+          text: aiReply,
+          timestamp: aiMsgTime
+        };
+
+        updatedData.transcript.push({ sender: 'ai', text: aiReply, timestamp: aiMsgTime });
+        extractedDataRef.current = updatedData;
+        setExtractedData({ ...updatedData });
+        setMessages(prev => [...prev, aiMsg]);
+
+        // Speak the AI reply
+        askQuestionWithAudio(aiReply);
+
+        // Check if report collection is complete
+        if (aiData.is_complete) {
+          const finalNarrative = generateStatutoryNarrative(updatedData);
+          updatedData.statutory_fir_narrative = finalNarrative;
+          extractedDataRef.current = updatedData;
+          setExtractedData({ ...updatedData });
+          isDoneRef.current = true;
+          setIsDone(true);
+        }
+
+        handledByBackend = true;
+      }
+    } catch (apiErr) {
+      console.warn("Backend dynamic intake error, fallback to local state engine:", apiErr);
+    }
+
+    // 2. Local Fallback if backend was unreachable or errored
+    if (!handledByBackend) {
+      const curIdx = currentStepRef.current;
+      const currentQ = questions[curIdx] || questions[0];
+
+      if (currentQ.field === 'victim_name') {
+        updatedData.victim_name = cleanAnswer;
+      } else if (currentQ.field === 'amount_lost') {
+        const parsed = parseSpokenAmount(cleanAnswer);
+        updatedData.amount_lost = parsed.amount !== null ? parsed.amount : (parseFloat(cleanAnswer.replace(/[^0-9.]/g, '')) || 250000);
+      } else if (currentQ.field === 'suspect_wallet') {
+        const extractedWallet = extractWalletAddress(cleanAnswer) || cleanAnswer;
+        updatedData.suspect_wallet = extractedWallet;
+        if (extractedWallet.startsWith('0x') || extractedWallet.length > 25) {
+          runBackgroundThreatTriage(extractedWallet);
+        }
+      } else if (currentQ.field === 'scam_channel') {
+        updatedData.scam_channel = normalizeScamChannel(cleanAnswer);
+      } else if (currentQ.field === 'description') {
+        updatedData.description = cleanAnswer;
+      } else {
+        (updatedData as any)[currentQ.field] = cleanAnswer;
+      }
+
+      const nextIndex = curIdx + 1;
+      currentStepRef.current = nextIndex;
+      setCurrentStepIndex(nextIndex);
+
+      if (nextIndex < questions.length) {
+        const nextQ = questions[nextIndex];
+        const nextPrompt = lang === 'hi' ? nextQ.questionHi : nextQ.questionEn;
+        const nextAiMsgTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const nextAiMsg = {
           id: `ai-${Date.now()}`,
           sender: 'ai' as const,
           text: nextPrompt,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: nextAiMsgTime
         };
+
+        updatedData.transcript.push({ sender: 'ai', text: nextPrompt, timestamp: nextAiMsgTime });
+        extractedDataRef.current = updatedData;
+        setExtractedData({ ...updatedData });
         setMessages(prev => [...prev, nextAiMsg]);
+
         askQuestionWithAudio(nextPrompt);
-      }, 400);
-    } else {
-      // Completed all questions!
-      const finalNarrative = generateStatutoryNarrative(updatedData);
-      updatedData.statutory_fir_narrative = finalNarrative;
-      extractedDataRef.current = updatedData;
-      setExtractedData(updatedData);
-      isDoneRef.current = true;
-      setIsDone(true);
-
-      const completionGreeting = lang === 'hi' 
-        ? 'धन्यवाद! आपकी शिकायत के सभी विवरण सफलता पूर्वक दर्ज कर लिए गए हैं। AI लीगल ड्राफ्टर एजेंट ने धारा 420 IPC और 66D IT Act के तहत औपचारिक FIR ड्राफ्ट तैयार कर लिया है।'
-        : 'Thank you! Your complaint details have been captured. AI Legal Drafter Agent has synthesized a formal FIR dossier under Sec 420 IPC & Sec 66D IT Act.';
-
-      setTimeout(() => {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: `ai-finish-${Date.now()}`,
-            sender: 'ai',
-            text: completionGreeting,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-        if (!voiceMuted) {
-          speak(completionGreeting, lang === 'hi' ? 'hi-IN' : 'en-IN');
-        }
-      }, 400);
+      } else {
+        const finalNarrative = generateStatutoryNarrative(updatedData);
+        updatedData.statutory_fir_narrative = finalNarrative;
+        extractedDataRef.current = updatedData;
+        setExtractedData({ ...updatedData });
+        isDoneRef.current = true;
+        setIsDone(true);
+      }
     }
+
+    setIsProcessing(false);
   };
 
   const handleFinalSubmit = () => {
     onComplete(extractedData);
   };
 
+  const activeQuestion = questions[Math.min(currentStepIndex, questions.length - 1)];
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-white relative overflow-hidden flex flex-col h-[700px] max-h-[85vh]">
+    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-white relative overflow-hidden flex flex-col h-[720px] max-h-[85vh]">
       {/* Background forensic neon glow */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -483,13 +539,13 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
               <h3 className="text-sm font-black text-white tracking-wide">
                 AI Voice Complaint Assistant
               </h3>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5 text-blue-400" />
-                Hands-Free Auto-Listen Swarm
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                Live Dynamic Intake
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Microphone turns on automatically • Speak details to auto-advance to next question
+              Microphone listens automatically • Speak or type your answer to advance
             </p>
           </div>
         </div>
@@ -557,7 +613,7 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
       )}
 
       {triageAlert.verdict && triageAlert.verdict.risk_tier === 'CRITICAL' && (
-        <div className="mt-2 p-3 rounded-xl bg-red-950/80 border-2 border-red-500/80 flex items-center justify-between gap-3 text-xs text-white shadow-lg shadow-red-900/40 shrink-0 animate-bounce" style={{ animationIterationCount: 2 }}>
+        <div className="mt-2 p-3 rounded-xl bg-red-950/80 border-2 border-red-500/80 flex items-center justify-between gap-3 text-xs text-white shadow-lg shadow-red-900/40 shrink-0">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
             <div>
@@ -613,24 +669,45 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
           );
         })}
 
-        {/* Live Speech Recognition Transcript Indicator (Active Listening) */}
+        {/* Real-time Listening Banner */}
         {isListening && (
-          <div className="flex items-center gap-2 p-3 rounded-2xl bg-blue-950/70 border border-blue-600/80 text-xs text-blue-200 shadow-md shadow-blue-900/30">
-            <div className="flex items-center gap-0.5 h-4">
-              <span className="w-1 bg-emerald-400 rounded-full animate-pulse" style={{ height: `${Math.max(20, audioLevel)}%` }} />
-              <span className="w-1 bg-emerald-400 rounded-full animate-pulse" style={{ height: `${Math.max(40, audioLevel * 0.8)}%` }} />
-              <span className="w-1 bg-emerald-400 rounded-full animate-pulse" style={{ height: `${Math.max(60, audioLevel * 1.2)}%` }} />
-              <span className="w-1 bg-emerald-400 rounded-full animate-pulse" style={{ height: `${Math.max(30, audioLevel * 0.9)}%` }} />
+          <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-emerald-950/60 border border-emerald-500/70 text-xs text-emerald-200 shadow-lg shadow-emerald-900/30 animate-pulse">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-0.5 h-4">
+                <span className="w-1 bg-emerald-400 rounded-full animate-bounce" style={{ height: `${Math.max(25, audioLevel)}%`, animationDelay: '0ms' }} />
+                <span className="w-1 bg-emerald-400 rounded-full animate-bounce" style={{ height: `${Math.max(45, audioLevel * 0.8)}%`, animationDelay: '150ms' }} />
+                <span className="w-1 bg-emerald-400 rounded-full animate-bounce" style={{ height: `${Math.max(65, audioLevel * 1.2)}%`, animationDelay: '300ms' }} />
+                <span className="w-1 bg-emerald-400 rounded-full animate-bounce" style={{ height: `${Math.max(35, audioLevel * 0.9)}%`, animationDelay: '200ms' }} />
+              </div>
+              <span className="font-medium text-emerald-300">
+                🎙️ {transcript ? `"${transcript}"` : (lang === 'hi' ? 'माइक सुन रहा है... अपना उत्तर बोलें' : 'Listening... Speak your answer now')}
+              </span>
             </div>
-            <span className="font-mono text-emerald-300 font-semibold">
-              🎙️ {transcript || (lang === 'hi' ? 'माइक सक्रिय है... बोलिए (बोलते ही आगे बढ़ेगा)' : 'Mic active... Speak your answer (auto-advances)')}
-            </span>
+
+            {transcript && (
+              <button
+                type="button"
+                onClick={() => handleSendResponse(transcript)}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Send</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Processing Indicator */}
+        {isProcessing && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-950/40 border border-blue-800/40 text-xs text-blue-300">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+            <span>AI Intake Officer is processing your response...</span>
           </div>
         )}
 
         {/* Completed Confirmation Dossier Card */}
         {isDone && (
-          <div className="mt-4 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950/70 border-2 border-emerald-500/70 shadow-2xl animate-fadeIn">
+          <div className="mt-4 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950/70 border-2 border-emerald-500/70 shadow-2xl">
             <div className="flex items-center gap-2.5 mb-3 pb-3 border-b border-slate-800">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
                 <CheckCircle2 className="w-5 h-5" />
@@ -640,30 +717,30 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
                   Complaint Dossier Synthesized
                 </h4>
                 <span className="text-[10px] text-emerald-400 font-mono">
-                  Agent 3: Legal FIR Requisition Ready (Sec 419, 420 IPC • Sec 66D IT Act)
+                  Legal Statutory Requisition Ready (Sec 419, 420 IPC • Sec 66D IT Act • Sec 94 BNSS)
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs mb-4">
               <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <span className="text-[10px] text-slate-400 block font-mono">Victim Name</span>
-                <span className="font-bold text-white">{extractedData.victim_name}</span>
+                <span className="text-[10px] text-slate-400 block font-mono">Complainant Name</span>
+                <span className="font-bold text-white">{extractedData.victim_name || 'Recorded'}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <span className="text-[10px] text-slate-400 block font-mono">Loss Amount</span>
+                <span className="text-[10px] text-slate-400 block font-mono">Reported Loss</span>
                 <span className="font-bold text-emerald-400">₹{(extractedData.amount_lost || 0).toLocaleString('en-IN')}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 col-span-2">
-                <span className="text-[10px] text-slate-400 block font-mono">Assigned Investigator</span>
+                <span className="text-[10px] text-slate-400 block font-mono">Suspect Wallet / TxID</span>
+                <span className="font-mono text-[11px] text-blue-300 break-all">{extractedData.suspect_wallet || 'Recorded in evidence locker'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 col-span-2">
+                <span className="text-[10px] text-slate-400 block font-mono">Assigned Investigating Officer</span>
                 <span className="font-bold text-blue-300 flex items-center gap-1.5 mt-0.5">
                   <UserCheck className="w-3.5 h-3.5 text-blue-400" />
                   <span>{extractedData.investigator_name || 'Central Cyber Queue Auto-Assign'}</span>
                 </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 col-span-2">
-                <span className="text-[10px] text-slate-400 block font-mono">Suspect Wallet</span>
-                <span className="font-mono text-[11px] text-blue-300 break-all">{extractedData.suspect_wallet || 'Pending Resolution'}</span>
               </div>
             </div>
 
@@ -689,13 +766,14 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(lang === 'hi' 
-              ? questions[currentStepIndex].quickRepliesHi 
-              : questions[currentStepIndex].quickRepliesEn
+              ? activeQuestion.quickRepliesHi 
+              : activeQuestion.quickRepliesEn
             ).map((reply, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => handleSendResponse(reply)}
-                className="text-[11px] px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 border border-slate-700 transition-all shadow-sm"
+                className="text-[11px] px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 border border-slate-700 transition-all shadow-sm cursor-pointer"
               >
                 {reply}
               </button>
@@ -724,26 +802,26 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
                   startListening();
                 }
               }}
-              className={`p-3 rounded-2xl transition-all shadow-md flex items-center justify-center ${
+              className={`p-3 rounded-2xl transition-all shadow-md flex items-center justify-center cursor-pointer ${
                 isListening
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/50 animate-pulse ring-4 ring-emerald-500/30'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/50 ring-4 ring-emerald-500/30'
                   : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
               }`}
-              title={isListening ? 'Microphone Active (Listening...)' : 'Click to Speak'}
+              title={isListening ? 'Click to pause mic' : 'Click to start speaking'}
             >
-              {isListening ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5 text-slate-200" />}
+              {isListening ? <Mic className="w-5 h-5 text-white animate-pulse" /> : <MicOff className="w-5 h-5 text-slate-200" />}
             </button>
 
-            {/* Text Input */}
+            {/* Text Input with Real-time Speech Sync */}
             <div className="relative flex-1">
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder={
-                  lang === 'hi'
-                    ? questions[currentStepIndex].placeholderHi
-                    : questions[currentStepIndex].placeholderEn
+                  isListening
+                    ? (lang === 'hi' ? 'बोलिए, मैं सुन रहा हूं...' : 'Listening... Speak your answer now')
+                    : (lang === 'hi' ? activeQuestion.placeholderHi : activeQuestion.placeholderEn)
                 }
                 className="w-full bg-slate-800/90 border border-slate-700/80 rounded-2xl py-3 pl-4 pr-10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner"
               />
@@ -752,8 +830,8 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!inputText.trim()}
-              className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white rounded-2xl transition-colors shadow-md shadow-blue-600/20"
+              disabled={!inputText.trim() || isProcessing}
+              className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white rounded-2xl transition-colors shadow-md shadow-blue-600/20 cursor-pointer"
               title="Submit Answer"
             >
               <Send className="w-4 h-4" />
@@ -761,11 +839,22 @@ Immediate preservation of wallet ledger logs, issuance of statutory notices unde
           </form>
 
           <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 px-1 font-mono">
-            <span>Question {currentStepIndex + 1} of {questions.length}</span>
-            <span className="text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>Auto-Advance Enabled</span>
-            </span>
+            <span>Step {currentStepIndex + 1} of {questions.length}: {activeQuestion.field.replace('_', ' ').toUpperCase()}</span>
+            <div className="flex items-center gap-3">
+              {!isListening && (
+                <button
+                  type="button"
+                  onClick={() => startListening()}
+                  className="text-blue-400 hover:text-blue-300 font-bold underline cursor-pointer"
+                >
+                  🎙️ Turn Mic On
+                </button>
+              )}
+              <span className="text-emerald-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>Auto-Advance Ready</span>
+              </span>
+            </div>
           </div>
         </div>
       )}

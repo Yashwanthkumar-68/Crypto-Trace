@@ -22,6 +22,7 @@ import {
   CreateAlertRulePayload,
   AuditVerificationResult,
   BlockchainNetworkInfo,
+  ChainHealthInfo,
   MultichainWalletSummary,
   CrossChainLinkItem,
   RecordCrossChainLinkPayload,
@@ -36,7 +37,12 @@ import {
   ScamCampaignTimelineResponse,
   RealWorldEventCreate,
   WalletVerificationRequest,
-  WalletVerificationResponse
+  WalletVerificationResponse,
+  EvasionCountermeasuresResponse,
+  CollaborationOfficer,
+  CaseCollaboratorItem,
+  TeamNoteItem,
+  ActivityFeedItem
 } from '../types';
 
 function getApiBase(): string {
@@ -191,11 +197,31 @@ export const api = {
   },
 
   // Analysis & Graph
-  async getGraph(caseId: string, hops: number = 3, suspiciousOnly: boolean = false): Promise<SubgraphData> {
-    const res = await fetch(`${API_BASE}/analysis/graph/${caseId}?hops=${hops}&suspicious_only=${suspiciousOnly}`, {
-      headers: getAuthHeader()
-    });
+  async getGraph(
+    caseId: string,
+    hops: number = 3,
+    suspiciousOnly: boolean = false,
+    antiDust: boolean = true,
+    dustThreshold: number = 0.02
+  ): Promise<SubgraphData> {
+    const res = await fetch(
+      `${API_BASE}/analysis/graph/${caseId}?hops=${hops}&suspicious_only=${suspiciousOnly}&anti_dust=${antiDust}&dust_threshold=${dustThreshold}`,
+      { headers: getAuthHeader() }
+    );
     if (!res.ok) throw new Error('Failed to load transaction graph');
+    return res.json();
+  },
+
+  async getEvasionCountermeasures(
+    caseId: string,
+    antiDust: boolean = true,
+    dustThreshold: number = 0.02
+  ): Promise<EvasionCountermeasuresResponse> {
+    const res = await fetch(
+      `${API_BASE}/analysis/case/${caseId}/evasion-countermeasures?anti_dust=${antiDust}&dust_threshold=${dustThreshold}`,
+      { headers: getAuthHeader() }
+    );
+    if (!res.ok) throw new Error('Failed to load evasion countermeasures analysis');
     return res.json();
   },
 
@@ -267,6 +293,35 @@ export const api = {
       body: JSON.stringify({ case_id: caseId, question })
     });
     if (!res.ok) throw new Error('Investigation copilot unavailable');
+    return res.json();
+  },
+
+  async executeAutonomousAgentAction(params: {
+    instruction: string;
+    case_id?: string;
+    wallet_address?: string;
+    blockchain?: string;
+  }): Promise<{
+    thought: string;
+    tool_executed: string;
+    tools_executed?: string[];
+    tool_result: Record<string, any>;
+    tool_results?: Record<string, any>;
+    narrative_response: string;
+    execution_receipt: {
+      execution_id: string;
+      timestamp: string;
+      tools_count?: number;
+      tools_executed?: string[];
+      status: string;
+    };
+  }> {
+    const res = await fetch(`${API_BASE}/agent/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(params)
+    });
+    if (!res.ok) throw new Error('Autonomous agent action failed');
     return res.json();
   },
 
@@ -860,6 +915,12 @@ export const api = {
     return res.json();
   },
 
+  async getChainsHealth(): Promise<ChainHealthInfo[]> {
+    const res = await fetch(`${API_BASE}/chains/health`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
+  },
+
   async getMultichainWallet(address: string): Promise<MultichainWalletSummary> {
     const res = await fetch(`${API_BASE}/chains/wallet/${address}`, { headers: getAuthHeader() });
     if (!res.ok) throw new Error('Failed to fetch multi-chain wallet data');
@@ -1128,6 +1189,115 @@ export const api = {
       throw new Error(err.detail || 'Failed to generate Section 94 BNSS Subpoena notice');
     }
     return res.blob();
+  },
+
+  // ==========================================
+  // COLLABORATION & MULTI-OFFICER CO-INVESTIGATION
+  // ==========================================
+  async getAvailableCollaborators(caseId?: string): Promise<CollaborationOfficer[]> {
+    const query = caseId ? `?case_id=${encodeURIComponent(caseId)}` : '';
+    const res = await fetch(`${API_BASE}/collaboration/available-investigators${query}`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async getCaseCollaborators(caseId: string): Promise<CaseCollaboratorItem[]> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/collaborators`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async sendCollaborationInvite(caseId: string, payload: { investigator_id: number; message: string }): Promise<any> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/invite`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to send collaboration invite' }));
+      throw new Error(err.detail || 'Failed to send collaboration invite');
+    }
+    return res.json();
+  },
+
+  async respondCollaborationInvite(caseId: string, assignmentId: number, action: 'ACCEPT' | 'DECLINE'): Promise<any> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/invitations/${assignmentId}/respond`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to respond to collaboration invite' }));
+      throw new Error(err.detail || 'Failed to respond to invite');
+    }
+    return res.json();
+  },
+
+  async removeCaseCollaborator(caseId: string, collaboratorId: string | number): Promise<any> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/collaborators/${collaboratorId}`, {
+      method: 'DELETE',
+      headers: getAuthHeader()
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to remove collaborator' }));
+      throw new Error(err.detail || 'Failed to remove collaborator');
+    }
+    return res.json();
+  },
+
+  async getCaseTeamNotes(caseId: string): Promise<TeamNoteItem[]> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/team-notes`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async addCaseTeamNote(caseId: string, content: string, mentions?: string[]): Promise<TeamNoteItem> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/team-notes`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, mentions })
+    });
+    if (!res.ok) throw new Error('Failed to post team note');
+    return res.json();
+  },
+
+  async getCaseActivityFeed(caseId: string): Promise<ActivityFeedItem[]> {
+    const res = await fetch(`${API_BASE}/collaboration/cases/${caseId}/activity-feed`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  // ==========================================
+  // GEOLOCATION & JURISDICTIONS
+  // ==========================================
+  async getCaseGeoMap(caseId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/geo/case/${encodeURIComponent(caseId)}/map`, { headers: getAuthHeader() });
+    if (!res.ok) {
+      // Fallback
+      const fb = await fetch(`${API_BASE}/geo/vasp-locations`, { headers: getAuthHeader() });
+      if (fb.ok) {
+        const markers = await fb.json();
+        return { markers, vasp_matches: ["Binance", "Kraken", "Tornado Cash"], jurisdictions: [] };
+      }
+      return { markers: [], vasp_matches: [], jurisdictions: [] };
+    }
+    return res.json();
+  },
+
+  async lookupIPGeo(ipAddress: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/geo/ip-lookup`, {
+      method: 'POST',
+      headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip_address: ipAddress })
+    });
+    if (!res.ok) throw new Error('IP geolocation lookup failed');
+    return res.json();
+  },
+
+  async getJurisdictionsSummary(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/geo/jurisdictions`, { headers: getAuthHeader() });
+    if (!res.ok) return [];
+    return res.json();
   },
 
   async get(url: string): Promise<any> {

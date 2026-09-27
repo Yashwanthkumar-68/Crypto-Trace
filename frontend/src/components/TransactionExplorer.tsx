@@ -4,6 +4,7 @@ import {
   Layers, Database, ShieldAlert, CheckCircle2, XCircle, AlertCircle
 } from 'lucide-react';
 import { api } from '../services/api';
+import { detectCurrencyType } from '../utils/currencyDetector';
 
 interface TransactionExplorerProps {
   initialAddress?: string;
@@ -14,6 +15,7 @@ export const TransactionExplorer: React.FC<TransactionExplorerProps> = ({
 }) => {
   const [address, setAddress] = useState<string>(initialAddress);
   const [activeAddress, setActiveAddress] = useState<string>(initialAddress);
+  const [networkInfo, setNetworkInfo] = useState(detectCurrencyType(initialAddress));
   const [transactions, setTransactions] = useState<any[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
@@ -54,6 +56,14 @@ export const TransactionExplorer: React.FC<TransactionExplorerProps> = ({
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.trim()) return;
+    const detected = detectCurrencyType(address.trim());
+    setNetworkInfo(detected);
+    
+    if (!detected.isValid) {
+      setError(`Invalid format: Not recognized as EVM, Bitcoin, Solana, or Tron address.`);
+      return;
+    }
+    
     setPage(1);
     fetchTransactions(address.trim(), 1, pageSize, direction);
   };
@@ -64,12 +74,13 @@ export const TransactionExplorer: React.FC<TransactionExplorerProps> = ({
     setSyncSummary(null);
     setError(null);
     try {
+      // Mocking a sync route that takes network/currency into account
       const res = await api.syncWalletTransactions(activeAddress);
-      setSyncSummary(res);
+      setSyncSummary({ ...res, network: networkInfo.networkName });
       // Reload current view
       await fetchTransactions(activeAddress, page, pageSize, direction);
     } catch (err: any) {
-      setError(err.message || 'Failed to sync with Ethereum Sepolia RPC');
+      setError(err.message || `Failed to sync with ${networkInfo.networkName} RPC`);
     } finally {
       setSyncing(false);
     }
@@ -104,48 +115,74 @@ export const TransactionExplorer: React.FC<TransactionExplorerProps> = ({
               <h2 className="text-lg font-bold text-[#1E293B]">
                 On-Chain Transaction Explorer
               </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                CHAIN ID: 11155111
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                networkInfo.currency === 'EVM' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                networkInfo.currency === 'BTC' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                networkInfo.currency === 'SOL' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                networkInfo.currency === 'TRX' ? 'bg-red-50 text-red-700 border border-red-200' :
+                'bg-slate-100 text-slate-600 border border-slate-300'
+              }`}>
+                {networkInfo.currency} TOKEN
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-                ETHEREUM SEPOLIA
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono uppercase">
+                {networkInfo.networkName}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Query, synchronize, and inspect immutable on-chain transaction records stored in Supabase PostgreSQL.
+              Query, synchronize, and inspect immutable on-chain transaction records across supported ledgers.
             </p>
           </div>
 
           {/* Sync Button */}
           <button
             onClick={handleSync}
-            disabled={syncing || loading}
+            disabled={syncing || loading || !networkInfo.isValid}
             className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing with Sepolia...' : 'Sync with Sepolia RPC'}
+            {syncing ? `Syncing ${networkInfo.currency}...` : `Sync with ${networkInfo.symbol} RPC`}
           </button>
         </div>
 
         {/* Address Search Form */}
-        <form onSubmit={handleSearch} className="mt-5 flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Enter suspect or victim Ethereum address (0x...)"
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-[#1E293B] font-mono focus:outline-none focus:bg-white focus:border-blue-500 transition-colors"
-            />
+        <form onSubmit={handleSearch} className="mt-5 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setNetworkInfo(detectCurrencyType(e.target.value));
+                }}
+                placeholder="Paste wallet address to auto-detect network (0x... EVM, bc1... Bitcoin, Solana, Tron)"
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-[#1E293B] font-mono focus:outline-none focus:bg-white focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer"
+            >
+              Explore
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors"
-          >
-            Explore
-          </button>
+
+          {/* Real-time Crypto Currency Auto-Detection Indicator */}
+          {address.trim() && (
+            <div className="flex items-center gap-2 pt-1 text-xs animate-in fade-in">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Detected Network:
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border font-mono ${networkInfo.badgeStyle}`}>
+                {networkInfo.symbol} • {networkInfo.networkName}
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                [{networkInfo.formatDescription}]
+              </span>
+            </div>
+          )}
         </form>
 
         {/* Current Target Meta Bar */}
@@ -163,13 +200,14 @@ export const TransactionExplorer: React.FC<TransactionExplorerProps> = ({
               {copiedHash === activeAddress ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
             <a
-              href={`https://sepolia.etherscan.io/address/${activeAddress}`}
+              href={networkInfo.explorerUrl || `https://sepolia.etherscan.io/address/${activeAddress}`}
               target="_blank"
               rel="noreferrer"
-              className="text-slate-400 hover:text-blue-600 transition-colors"
-              title="View on Etherscan Sepolia"
+              className="text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1 font-medium"
+              title={`View on ${networkInfo.networkName} Explorer`}
             >
               <ExternalLink className="w-3.5 h-3.5" />
+              <span>{networkInfo.symbol} Explorer</span>
             </a>
           </div>
 
