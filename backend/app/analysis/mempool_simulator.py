@@ -1,8 +1,12 @@
 import datetime
 from typing import List, Dict, Any, Optional, Tuple
-from eth.db.atomic import AtomicDB
-from eth.chains.base import MiningChain
-from eth.vm.forks.shanghai import ShanghaiVM
+try:
+    from eth.db.atomic import AtomicDB
+except ImportError:
+    class AtomicDB:
+        def __init__(self):
+            self._data = {}
+
 
 from app.analysis.pattern_models import (
     MempoolTxItem, SimulatedTxResult, MempoolSimulationResponse,
