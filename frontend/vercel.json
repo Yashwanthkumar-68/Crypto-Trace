@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://cryptotrace-backend.onrender.com/api/:path*"
+      "destination": "https://cryptotrace-backend-t9q8.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
